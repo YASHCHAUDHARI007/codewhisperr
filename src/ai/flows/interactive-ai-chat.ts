@@ -10,8 +10,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
-export const maxDuration = 60;
-
 const InteractiveAiChatInputSchema = z.object({
   query: z.string().describe("The user's natural language question about the codebase."),
   codebaseContent: z

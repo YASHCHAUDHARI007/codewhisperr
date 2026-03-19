@@ -10,8 +10,6 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const maxDuration = 60;
-
 /**
  * Represents the input for the AI project overview flow.
  * It expects the concatenated content of the codebase files.

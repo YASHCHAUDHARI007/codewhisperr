@@ -1,12 +1,12 @@
-
 "use client";
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, Github, Zap, Shield, Search, ArrowRight, Code2, Loader2 } from 'lucide-react';
+import { Upload, Github, Zap, Shield, Search, Code2, Loader2, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { useFirestore, useAuth, useUser, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
@@ -16,6 +16,8 @@ import JSZip from 'jszip';
 export default function LandingPage() {
   const [githubUrl, setGithubUrl] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingStage, setProcessingStage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const db = useFirestore();
@@ -25,8 +27,6 @@ export default function LandingPage() {
   const ensureAuth = async () => {
     if (!user) {
       initiateAnonymousSignIn(auth);
-      // We don't await because it's non-blocking, but the provider will update state.
-      // For the sake of the next immediate operation, we wait a beat or let the user try again.
       return null;
     }
     return user.uid;
@@ -43,13 +43,15 @@ export default function LandingPage() {
     }
 
     setIsProcessing(true);
+    setUploadProgress(0);
+    setProcessingStage('Extracting ZIP content...');
+    
     try {
       const zip = new JSZip();
       const content = await zip.loadAsync(file);
       const projectId = doc(collection(db, 'temp')).id;
       const projectName = file.name.replace('.zip', '');
 
-      // Create Project Doc
       const projectRef = doc(db, 'users', userId, 'projects', projectId);
       setDocumentNonBlocking(projectRef, {
         id: projectId,
@@ -60,35 +62,42 @@ export default function LandingPage() {
         uploadFileName: file.name
       }, { merge: true });
 
-      // Process files
-      const filePromises: Promise<void>[] = [];
-      for (const [path, zipEntry] of Object.entries(content.files)) {
-        if (!zipEntry.dir) {
-          filePromises.push((async () => {
-            const fileContent = await zipEntry.async('string');
-            const fileId = doc(collection(db, 'temp')).id;
-            const fileRef = doc(db, 'users', userId, 'projects', projectId, 'codeFiles', fileId);
-            setDocumentNonBlocking(fileRef, {
-              id: fileId,
-              projectId: projectId,
-              userId: userId,
-              filePath: path,
-              fileName: path.split('/').pop() || '',
-              fileContent: fileContent,
-              fileExtension: path.split('.').pop() || ''
-            }, { merge: true });
-          })());
-        }
+      const filesToProcess = Object.entries(content.files).filter(([_, entry]) => !entry.dir);
+      const totalFiles = filesToProcess.length;
+      let processedCount = 0;
+
+      setProcessingStage(`Uploading ${totalFiles} files...`);
+
+      // Process in batches to avoid overwhelming the browser and Firestore
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
+        const batch = filesToProcess.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async ([path, zipEntry]) => {
+          const fileContent = await zipEntry.async('string');
+          const fileId = doc(collection(db, 'temp')).id;
+          const fileRef = doc(db, 'users', userId, 'projects', projectId, 'codeFiles', fileId);
+          
+          setDocumentNonBlocking(fileRef, {
+            id: fileId,
+            projectId: projectId,
+            userId: userId,
+            filePath: path,
+            fileName: path.split('/').pop() || '',
+            fileContent: fileContent,
+            fileExtension: path.split('.').pop() || ''
+          }, { merge: true });
+          
+          processedCount++;
+          setUploadProgress(Math.round((processedCount / totalFiles) * 100));
+        }));
       }
 
-      await Promise.all(filePromises);
-      
+      setProcessingStage('Finalizing analysis...');
       setDocumentNonBlocking(projectRef, { status: 'analyzed' }, { merge: true });
       router.push(`/dashboard/${projectId}`);
     } catch (error) {
       console.error(error);
       toast({ title: "Upload Failed", description: "Could not process the ZIP file.", variant: "destructive" });
-    } finally {
       setIsProcessing(false);
     }
   };
@@ -101,17 +110,18 @@ export default function LandingPage() {
     if (!userId) return;
 
     setIsProcessing(true);
+    setUploadProgress(0);
+    setProcessingStage('Connecting to GitHub...');
+
     try {
-      // Basic GitHub API fetch (public repos)
-      // Format: https://github.com/owner/repo
-      const parts = githubUrl.split('/');
+      const parts = githubUrl.replace(/\/$/, '').split('/');
       const owner = parts[parts.length - 2];
       const repo = parts[parts.length - 1];
 
-      if (!owner || !repo) throw new Error("Invalid GitHub URL");
+      if (!owner || !repo) throw new Error("Invalid GitHub URL. Use format: github.com/user/repo");
 
       const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents`);
-      if (!response.ok) throw new Error("Repo not found or private");
+      if (!response.ok) throw new Error("Repository not found or private.");
       
       const contents = await response.json();
       const projectId = doc(collection(db, 'temp')).id;
@@ -126,33 +136,77 @@ export default function LandingPage() {
         sourceUrl: githubUrl
       }, { merge: true });
 
-      // Recursive fetch would be better, but for MVP we fetch top-level or files we can see
-      for (const item of contents) {
-        if (item.type === 'file') {
-          const fileRes = await fetch(item.download_url);
-          const fileContent = await fileRes.text();
-          const fileId = doc(collection(db, 'temp')).id;
-          const fileRef = doc(db, 'users', userId, 'projects', projectId, 'codeFiles', fileId);
-          setDocumentNonBlocking(fileRef, {
-            id: fileId,
-            projectId: projectId,
-            userId: userId,
-            filePath: item.path,
-            fileName: item.name,
-            fileContent: fileContent,
-            fileExtension: item.name.split('.').pop() || ''
-          }, { merge: true });
-        }
+      const files = contents.filter((item: any) => item.type === 'file');
+      const totalFiles = files.length;
+      let processedCount = 0;
+
+      setProcessingStage(`Ingesting ${totalFiles} repository files...`);
+
+      for (const item of files) {
+        const fileRes = await fetch(item.download_url);
+        const fileContent = await fileRes.text();
+        const fileId = doc(collection(db, 'temp')).id;
+        const fileRef = doc(db, 'users', userId, 'projects', projectId, 'codeFiles', fileId);
+        
+        setDocumentNonBlocking(fileRef, {
+          id: fileId,
+          projectId: projectId,
+          userId: userId,
+          filePath: item.path,
+          fileName: item.name,
+          fileContent: fileContent,
+          fileExtension: item.name.split('.').pop() || ''
+        }, { merge: true });
+
+        processedCount++;
+        setUploadProgress(Math.round((processedCount / totalFiles) * 100));
       }
 
+      setProcessingStage('Preparing your dashboard...');
       setDocumentNonBlocking(projectRef, { status: 'analyzed' }, { merge: true });
       router.push(`/dashboard/${projectId}`);
     } catch (error: any) {
       toast({ title: "Ingestion Failed", description: error.message, variant: "destructive" });
-    } finally {
       setIsProcessing(false);
     }
   };
+
+  if (isProcessing) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-8 animate-in fade-in duration-500">
+        <div className="w-24 h-24 rounded-3xl bg-primary/10 flex items-center justify-center relative">
+          <Loader2 className="w-12 h-12 text-primary animate-spin" />
+          <div className="absolute inset-0 border-4 border-primary/20 rounded-3xl animate-pulse" />
+        </div>
+        
+        <div className="space-y-2 max-w-md">
+          <h2 className="text-3xl font-headline font-bold text-white tracking-tight">Processing Codebase</h2>
+          <p className="text-muted-foreground">{processingStage}</p>
+        </div>
+
+        <div className="w-full max-w-md space-y-4">
+          <Progress value={uploadProgress} className="h-2" />
+          <div className="flex justify-between text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            <span>{uploadProgress}% Complete</span>
+            <span>Optimizing Assets</span>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-3 gap-4 w-full max-w-lg pt-8">
+          {[
+            { icon: Shield, label: "Secure Transfer" },
+            { icon: Zap, label: "AI Mapping" },
+            { icon: Code2, label: "Stack Detection" }
+          ].map((item, i) => (
+            <div key={i} className="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/5 border border-white/5">
+              <item.icon className="w-5 h-5 text-primary/60" />
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
@@ -197,8 +251,7 @@ export default function LandingPage() {
               onClick={() => fileInputRef.current?.click()}
               disabled={isProcessing}
             >
-              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Select File"}
-              {isProcessing ? "Processing..." : "Select File"}
+              Select File
             </Button>
           </Card>
 
@@ -222,8 +275,7 @@ export default function LandingPage() {
                 type="submit"
                 disabled={isProcessing || !githubUrl}
               >
-                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Analyze Repo"}
-                {isProcessing ? "Processing..." : "Analyze Repo"}
+                Analyze Repo
               </Button>
             </form>
           </Card>
@@ -232,7 +284,7 @@ export default function LandingPage() {
         <div className="pt-8 border-t border-white/5">
           <div className="flex flex-wrap justify-center gap-8 text-muted-foreground text-sm">
             <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4" />
+              <CheckCircle2 className="w-4 h-4 text-primary" />
               <span>Secure Analysis</span>
             </div>
             <div className="flex items-center gap-2">

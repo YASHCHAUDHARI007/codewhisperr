@@ -1,23 +1,24 @@
-
 "use client";
 
 import { useState, useMemo } from 'react';
 import { SidebarProvider, Sidebar, SidebarContent, SidebarHeader, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { FileTree } from '@/components/dashboard/FileTree';
 import { ProjectOverviewPanel } from '@/components/dashboard/ProjectOverviewPanel';
 import { AIChatPanel } from '@/components/dashboard/AIChatPanel';
 import { FileExplainerPanel } from '@/components/dashboard/FileExplainerPanel';
-import { Code2, LayoutDashboard, MessageSquare, Info, ChevronRight, Loader2 } from 'lucide-react';
+import { Code2, LayoutDashboard, MessageSquare, Info, ChevronRight, Loader2, Rocket, Sparkles } from 'lucide-react';
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
   const { id: projectId } = useParams() as { id: string };
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
+  const router = useRouter();
 
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -64,7 +65,35 @@ export default function DashboardPage() {
       <div className="h-screen w-full flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
           <h2 className="text-2xl font-bold">Project not found</h2>
-          <Button onClick={() => window.location.href = '/'}>Go Home</Button>
+          <Button onClick={() => router.push('/')}>Go Home</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Waiting screen for processing status
+  if (project.status === 'processing') {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-background p-6 text-center space-y-12">
+        <div className="relative">
+          <div className="w-32 h-32 rounded-full border-b-2 border-primary animate-spin" />
+          <Rocket className="w-12 h-12 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-bounce" />
+        </div>
+        
+        <div className="space-y-4 max-w-lg">
+          <h2 className="text-4xl font-headline font-bold text-white tracking-tight flex items-center justify-center gap-3">
+            Analyzing Architecture <Sparkles className="text-accent" />
+          </h2>
+          <p className="text-muted-foreground text-lg">
+            We're mapping your project's structure and extracting core components. This will take just a few more moments.
+          </p>
+        </div>
+
+        <div className="w-full max-w-md space-y-2">
+          <Progress value={65} className="h-1" />
+          <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold">
+            Ingesting Files &bull; building dependency graph
+          </p>
         </div>
       </div>
     );
@@ -75,7 +104,7 @@ export default function DashboardPage() {
       <div className="flex h-screen w-full bg-background overflow-hidden">
         <Sidebar className="border-r border-white/5">
           <SidebarHeader className="p-4 border-b border-white/5 flex flex-row items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground cursor-pointer" onClick={() => router.push('/')}>
               <Code2 className="w-5 h-5" />
             </div>
             <div>
@@ -97,17 +126,17 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4">
               <SidebarTrigger className="md:hidden" />
               <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Dashboard</span>
+                <span className="text-muted-foreground cursor-pointer hover:text-white" onClick={() => router.push('/')}>Dashboard</span>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 <span className="text-white font-medium">{project.name}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="border-white/5 bg-white/5 text-xs font-medium">
-                Save Analysis
+              <Button variant="outline" size="sm" className="border-white/5 bg-white/5 text-xs font-medium" onClick={() => router.push('/')}>
+                Back Home
               </Button>
               <Button size="sm" className="bg-primary text-primary-foreground text-xs font-medium">
-                Export Map
+                Export Analysis
               </Button>
             </div>
           </header>

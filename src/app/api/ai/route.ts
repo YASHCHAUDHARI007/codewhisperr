@@ -1,10 +1,7 @@
 import OpenAI from "openai";
 
 /**
- * PRO AI API - Optimized Performance Edition
- * 1. Parallel Chunking: Processes multiple code segments simultaneously.
- * 2. Token Efficiency: Tight limits for lightning-fast inference.
- * 3. Synthesis: Expert architect persona for high-density insights.
+ * PRO AI API - Streaming & Parallel Performance Edition
  */
 
 const client = new OpenAI({
@@ -13,7 +10,7 @@ const client = new OpenAI({
 });
 
 const CHUNK_SIZE = 4000;
-const MODEL = "llama-3.1-8b-instant"; // Fastest Groq Model
+const MODEL = "llama-3.1-8b-instant";
 
 function chunkText(text: string, size = CHUNK_SIZE) {
   const chunks = [];
@@ -37,7 +34,7 @@ async function analyzeChunk(chunk: string, systemPrompt?: string) {
           content: chunk,
         },
       ],
-      max_tokens: 400, // Reduced for speed
+      max_tokens: 400,
     });
     return completion.choices[0].message.content || "";
   } catch (e) {
@@ -46,46 +43,70 @@ async function analyzeChunk(chunk: string, systemPrompt?: string) {
   }
 }
 
-async function mergeAnalysis(results: string[], originalPrompt: string, jsonMode: boolean) {
-  const combined = results.filter(Boolean).join("\n\n---\n\n");
-
-  const completion = await client.chat.completions.create({
-    model: MODEL,
-    messages: [
-      {
-        role: "system",
-        content: `You are a professional software architect. Refine the following analyses into a single structured explanation. ${
-          jsonMode ? "Return ONLY a valid JSON object." : ""
-        }`,
-      },
-      {
-        role: "user",
-        content: `Segmented Analysis:\n${combined}`,
-      },
-    ],
-    response_format: jsonMode ? { type: "json_object" } : undefined,
-    max_tokens: 800, // Reduced for faster output
-  });
-
-  return completion.choices[0].message.content || "";
-}
-
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { input, systemPrompt, jsonMode = false } = body;
+    const { input, systemPrompt, jsonMode = false, stream = false } = body;
     const content = (input || body.prompt || "").toString();
 
     if (!content) return Response.json({ result: "" });
 
-    // Parallelize processing for 10x speed boost
-    const chunks = chunkText(content);
+    // 1. Parallelize initial chunk processing for speed
+    const chunks = chunkText(content.slice(0, 12000)); // Limit total context for speed
     const analyses = await Promise.all(chunks.map(chunk => analyzeChunk(chunk, systemPrompt)));
+    const combinedAnalysis = analyses.filter(Boolean).join("\n\n---\n\n");
 
-    // Final Synthesis
-    const finalResult = await mergeAnalysis(analyses, content.slice(0, 200), jsonMode);
+    // 2. Final Synthesis (Streaming vs Non-Streaming)
+    if (stream) {
+      const responseStream = await client.chat.completions.create({
+        model: MODEL,
+        messages: [
+          {
+            role: "system",
+            content: `You are a professional software architect. Refine the following analyses into a clear, direct explanation. ${systemPrompt || ""}`,
+          },
+          {
+            role: "user",
+            content: `Segmented Analysis:\n${combinedAnalysis}`,
+          },
+        ],
+        stream: true,
+        max_tokens: 1000,
+      });
 
-    return Response.json({ result: finalResult });
+      const encoder = new TextEncoder();
+      return new Response(
+        new ReadableStream({
+          async start(controller) {
+            for await (const chunk of responseStream) {
+              const text = chunk.choices[0]?.delta?.content || "";
+              controller.enqueue(encoder.encode(text));
+            }
+            controller.close();
+          },
+        })
+      );
+    } else {
+      const completion = await client.chat.completions.create({
+        model: MODEL,
+        messages: [
+          {
+            role: "system",
+            content: `You are a professional software architect. Refine the following analyses into a single structured explanation. ${
+              jsonMode ? "Return ONLY a valid JSON object." : ""
+            }`,
+          },
+          {
+            role: "user",
+            content: `Segmented Analysis:\n${combinedAnalysis}`,
+          },
+        ],
+        response_format: jsonMode ? { type: "json_object" } : undefined,
+        max_tokens: 1000,
+      });
+
+      return Response.json({ result: completion.choices[0].message.content || "" });
+    }
   } catch (e: any) {
     console.error("API Error:", e);
     return Response.json({ error: "AI Failed", message: e.message }, { status: 500 });

@@ -33,34 +33,59 @@ export function AIChatPanel({ selectedFile }: { selectedFile?: any }) {
 
     const userMessage = input.trim();
     setInput('');
+    
+    // Add user message
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
+    // Prepare assistant placeholder
+    setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+
     try {
-      // OPTIMIZATION: Send ONLY relevant context (Selected file)
       const context = selectedFile 
-        ? `CURRENT FILE: ${selectedFile.filePath}\nCONTENT: ${selectedFile.fileContent.slice(0, 3000)}` 
+        ? `CURRENT FILE: ${selectedFile.filePath}\nCONTENT: ${selectedFile.fileContent.slice(0, 4000)}` 
         : "No specific file selected. Help generally.";
 
       const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          systemPrompt: "You are an AI assistant helping a developer. Be extremely concise and direct. Return JSON with 'answer' field.",
+          systemPrompt: "You are an AI assistant helping a developer. Be extremely concise and direct.",
           prompt: `Context:\n${context}\n\nUser Question:\n${userMessage}`,
-          jsonMode: true
+          stream: true
         }),
       });
 
       if (!res.ok) throw new Error("API request failed");
       
-      const data = await res.json();
-      const parsed = JSON.parse(data.result);
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
       
-      setMessages(prev => [...prev, { role: 'assistant', content: parsed.answer }]);
+      if (!reader) throw new Error("No reader available");
+
+      let fullResponse = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        fullResponse += chunk;
+
+        // Update the last message (the assistant's response) in real-time
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: 'assistant', content: fullResponse };
+          return updated;
+        });
+      }
     } catch (error) {
       console.error("Chat error:", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I encountered an error. Please try a shorter query." }]);
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = { role: 'assistant', content: "Sorry, I encountered an error while streaming. Please try again." };
+        return updated;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -80,29 +105,13 @@ export function AIChatPanel({ selectedFile }: { selectedFile?: any }) {
                   {m.role === 'assistant' ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
                 </div>
                 <div className={cn(
-                  "p-4 rounded-2xl text-sm leading-relaxed",
+                  "p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap",
                   m.role === 'assistant' ? "bg-white/5 text-muted-foreground border border-white/5" : "bg-primary text-primary-foreground font-medium"
                 )}>
-                  {m.content}
+                  {m.content || (isLoading && i === messages.length - 1 ? <Loader2 className="w-3 h-3 animate-spin" /> : null)}
                 </div>
               </div>
             ))}
-            {isLoading && (
-              <div className="flex gap-4 mr-auto">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center animate-pulse">
-                  <Bot className="w-4 h-4 text-primary" />
-                </div>
-                <div className="bg-white/5 border border-white/5 p-4 rounded-2xl flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
-                    <span className="text-xs text-muted-foreground font-medium">Analyzing context...</span>
-                  </div>
-                  <div className="h-2 w-32 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary animate-progress-indefinite" />
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </ScrollArea>
       </div>
@@ -123,7 +132,7 @@ export function AIChatPanel({ selectedFile }: { selectedFile?: any }) {
         <div className="flex items-center justify-center gap-2 mt-3">
           <Sparkles className="w-3 h-3 text-accent" />
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
-            Ultra-Fast Engine Enabled
+            Live Stream Engine Active
           </p>
         </div>
       </div>

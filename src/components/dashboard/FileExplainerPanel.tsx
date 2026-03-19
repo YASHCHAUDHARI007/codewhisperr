@@ -1,44 +1,65 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Code, Sparkles, Loader2, BrainCircuit } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 export function FileExplainerPanel({ file }: { file: any }) {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [explanation, setExplanation] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const currentFileId = useRef<string | null>(null);
 
   useEffect(() => {
     async function explainFile() {
+      if (!file || currentFileId.current === file.id) return;
+      
+      currentFileId.current = file.id;
+      setExplanation("");
       setLoading(true);
+      setIsStreaming(false);
+
       try {
         const res = await fetch("/api/ai", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-            systemPrompt: "Explain this file's role and logic. Return JSON with: explanation (string). Be direct.",
-            input: `Path: ${file.filePath}\nContent:\n${file.fileContent.slice(0, 5000)}`,
-            jsonMode: true
+            systemPrompt: "Explain this file's role and logic clearly. Use bullet points for key functions. Be direct.",
+            input: `Path: ${file.filePath}\nContent:\n${file.fileContent.slice(0, 6000)}`,
+            stream: true
           }),
         });
 
         if (!res.ok) throw new Error("API request failed");
         
-        const responseData = await res.json();
-        const parsed = JSON.parse(responseData.result);
-        setData(parsed);
+        setLoading(false);
+        setIsStreaming(true);
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        
+        if (!reader) throw new Error("No reader available");
+
+        let fullText = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          fullText += chunk;
+          setExplanation(fullText);
+        }
       } catch (error) {
         console.error("Failed to explain file", error);
-        setData({ explanation: "Failed to load explanation. The file might be too large or invalid." });
+        setExplanation("Failed to load explanation. The AI service might be temporarily unavailable.");
       } finally {
         setLoading(false);
+        setIsStreaming(false);
       }
     }
-    if (file) {
-      explainFile();
-    }
+
+    explainFile();
   }, [file]);
 
   return (
@@ -82,7 +103,8 @@ export function FileExplainerPanel({ file }: { file: any }) {
               </div>
             ) : (
               <div className="prose prose-invert prose-sm max-w-none text-muted-foreground leading-relaxed whitespace-pre-wrap pb-6 px-4">
-                {data?.explanation || "No explanation available."}
+                {explanation || "Initializing analysis..."}
+                {isStreaming && <span className="inline-block w-1.5 h-4 ml-1 bg-accent animate-pulse align-middle" />}
               </div>
             )}
           </ScrollArea>

@@ -21,8 +21,30 @@ const AiFileModuleExplanationOutputSchema = z.object({
 });
 export type AiFileModuleExplanationOutput = z.infer<typeof AiFileModuleExplanationOutputSchema>;
 
+/**
+ * Helper to call a function with retry logic for rate limits.
+ */
+async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000): Promise<T> {
+  let lastError;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      const errorMsg = error?.message || "";
+      if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
 export async function aiFileModuleExplanation(input: AiFileModuleExplanationInput): Promise<AiFileModuleExplanationOutput> {
-  return aiFileModuleExplanationFlow(input);
+  return callWithRetry(() => aiFileModuleExplanationFlow(input));
 }
 
 const aiFileModuleExplanationPrompt = ai.definePrompt({

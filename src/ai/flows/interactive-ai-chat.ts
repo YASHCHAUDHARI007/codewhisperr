@@ -23,8 +23,30 @@ const InteractiveAiChatOutputSchema = z.object({
 });
 export type InteractiveAiChatOutput = z.infer<typeof InteractiveAiChatOutputSchema>;
 
+/**
+ * Helper to call a function with retry logic for rate limits.
+ */
+async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000): Promise<T> {
+  let lastError;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      const errorMsg = error?.message || "";
+      if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
 export async function interactiveAiChat(input: InteractiveAiChatInput): Promise<InteractiveAiChatOutput> {
-  return interactiveAiChatFlow(input);
+  return callWithRetry(() => interactiveAiChatFlow(input));
 }
 
 const prompt = ai.definePrompt({

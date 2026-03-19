@@ -37,6 +37,28 @@ const AiProjectOverviewOutputSchema = z.object({
 export type AiProjectOverviewOutput = z.infer<typeof AiProjectOverviewOutputSchema>;
 
 /**
+ * Helper to call a function with retry logic for rate limits.
+ */
+async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000): Promise<T> {
+  let lastError;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      const errorMsg = error?.message || "";
+      if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2; // Exponential backoff
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
+/**
  * Generates a high-level overview of a software project based on its codebase content.
  *
  * @param input - An object containing the `codebaseContent` string.
@@ -45,7 +67,7 @@ export type AiProjectOverviewOutput = z.infer<typeof AiProjectOverviewOutputSche
 export async function aiProjectOverview(
   input: AiProjectOverviewInput
 ): Promise<AiProjectOverviewOutput> {
-  return aiProjectOverviewFlow(input);
+  return callWithRetry(() => aiProjectOverviewFlow(input));
 }
 
 const prompt = ai.definePrompt({

@@ -20,14 +20,14 @@ function chunkText(text: string, size = CHUNK_SIZE) {
   return chunks;
 }
 
-async function analyzeChunk(chunk: string, systemPrompt?: string) {
+async function analyzeChunk(chunk: string) {
   try {
     const completion = await client.chat.completions.create({
       model: MODEL,
       messages: [
         {
           role: "system",
-          content: systemPrompt || "You are a senior code analyst. Extract key structure and logic. Be extremely concise.",
+          content: "You are a senior code analyst. Extract key structure and logic from this specific chunk. Be extremely concise and objective.",
         },
         {
           role: "user",
@@ -49,11 +49,11 @@ export async function POST(req: Request) {
     const { input, systemPrompt, jsonMode = false, stream = false } = body;
     const content = (input || body.prompt || "").toString();
 
-    if (!content) return Response.json({ result: "" });
+    if (!content) return Response.json({ result: jsonMode ? JSON.stringify({ summary: "No code provided", techStack: [], architecture: "N/A" }) : "No content provided." });
 
     // 1. Parallelize initial chunk processing for speed
-    const chunks = chunkText(content.slice(0, 12000)); // Limit total context for speed
-    const analyses = await Promise.all(chunks.map(chunk => analyzeChunk(chunk, systemPrompt)));
+    const chunks = chunkText(content.slice(0, 16000)); // Limit total context for speed
+    const analyses = await Promise.all(chunks.map(chunk => analyzeChunk(chunk)));
     const combinedAnalysis = analyses.filter(Boolean).join("\n\n---\n\n");
 
     // 2. Final Synthesis (Streaming vs Non-Streaming)
@@ -92,13 +92,13 @@ export async function POST(req: Request) {
         messages: [
           {
             role: "system",
-            content: `You are a professional software architect. Refine the following analyses into a single structured explanation. ${
-              jsonMode ? "Return ONLY a valid JSON object." : ""
+            content: `${systemPrompt || "You are a professional software architect."} ${
+              jsonMode ? "CRITICAL: Return ONLY a valid JSON object. No backticks. No explanation text." : ""
             }`,
           },
           {
             role: "user",
-            content: `Segmented Analysis:\n${combinedAnalysis}`,
+            content: `Intermediate Analysis Results:\n${combinedAnalysis}`,
           },
         ],
         response_format: jsonMode ? { type: "json_object" } : undefined,

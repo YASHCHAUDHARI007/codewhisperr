@@ -17,7 +17,10 @@ export const ai = genkit({
       models: ['llama-3.3-70b-versatile'],
     }),
   ],
-  // Using Groq's high-performance Llama 3.3 model
-  // The genkitx-openai plugin prefixes models with 'openai/'
-  model: 'openai/llama-3.3-70b-versatile',
 });
+
+/**
+ * The specific model identifier for Groq's Llama 3.3 model.
+ * In the genkitx-openai plugin, custom models are prefixed with 'openai/'.
+ */
+export const GROQ_MODEL = 'openai/llama-3.3-70b-versatile';

@@ -47,7 +47,7 @@ const interactiveAiChatFlow = ai.defineFlow(
   },
   async (input) => {
     const { output } = await ai.generate({
-      model: AI_MODEL,
+      model: 'openai/llama3-8b-8192',
       prompt: `You are an AI assistant helping a developer understand their codebase. Answer the user's question accurately based on the provided context.
 
       Context:

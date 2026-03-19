@@ -14,6 +14,6 @@ export const ai = genkit({
 });
 
 /**
- * The specific model identifier for Groq's Llama 3.1 8B Instant model.
+ * The specific model identifier for Groq's Llama 3 8B model.
  */
-export const AI_MODEL = 'openai/llama-3.1-8b-instant';
+export const AI_MODEL = 'openai/llama3-8b-8192';

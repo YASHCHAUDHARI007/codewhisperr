@@ -47,7 +47,7 @@ const aiFileModuleExplanationFlow = ai.defineFlow(
   },
   async (input) => {
     const { output } = await ai.generate({
-      model: AI_MODEL,
+      model: 'openai/llama3-8b-8192',
       prompt: `Explain this file's role and functionality in the project.
       Path: ${input.filePath}
       Content:

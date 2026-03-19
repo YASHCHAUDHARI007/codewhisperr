@@ -49,7 +49,7 @@ const aiProjectOverviewFlow = ai.defineFlow(
   },
   async (input) => {
     const { output } = await ai.generate({
-      model: AI_MODEL,
+      model: 'openai/llama3-8b-8192',
       prompt: `You are an expert software architect. Analyze the provided codebase and return a structured overview including a summary of purpose, the tech stack, and the architecture pattern.
 
       Codebase:

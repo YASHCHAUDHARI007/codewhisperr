@@ -28,11 +28,11 @@ export type AiProjectOverviewInput = z.infer<typeof AiProjectOverviewInputSchema
  * It includes a summary, tech stack, and architecture description.
  */
 const AiProjectOverviewOutputSchema = z.object({
-  summary: z.string().describe('A high-level summary of the project\'s purpose.'),
+  summary: z.string().describe("A high-level summary of the project's purpose."),
   techStack: z
     .array(z.string())
     .describe('An array of technologies, frameworks, and languages used in the project.'),
-  architecture: z.string().describe('An explanation of the project\'s overall architecture.'),
+  architecture: z.string().describe("An explanation of the project's overall architecture."),
 });
 export type AiProjectOverviewOutput = z.infer<typeof AiProjectOverviewOutputSchema>;
 

@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
 const InteractiveAiChatInputSchema = z.object({
-  query: z.string().describe('The user\'s natural language question about the codebase.'),
+  query: z.string().describe("The user's natural language question about the codebase."),
   codebaseContent: z
     .string()
     .describe('The relevant parts of the codebase content to answer the query.'),
@@ -19,7 +19,7 @@ const InteractiveAiChatInputSchema = z.object({
 export type InteractiveAiChatInput = z.infer<typeof InteractiveAiChatInputSchema>;
 
 const InteractiveAiChatOutputSchema = z.object({
-  answer: z.string().describe('The AI\'s answer to the user\'s query.'),
+  answer: z.string().describe("The AI's answer to the user's query."),
 });
 export type InteractiveAiChatOutput = z.infer<typeof InteractiveAiChatOutputSchema>;
 
@@ -34,9 +34,9 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert software engineer and codebase analyst. Your task is to answer questions about the provided codebase content. If the information is not present in the provided context, state that you cannot find the information within the given context.
 
 Codebase Context:
-```
+\`\`\`
 {{{codebaseContent}}}
-```
+\`\`\`
 
 User's Question:
 {{{query}}}

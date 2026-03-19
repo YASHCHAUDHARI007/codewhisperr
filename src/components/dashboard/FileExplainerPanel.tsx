@@ -18,8 +18,8 @@ export function FileExplainerPanel({ file }: { file: any }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-            systemPrompt: "You are an AI assistant helping developers understand code. Return a JSON object with a single field 'explanation'.",
-            prompt: `Explain this file's role and functionality in the project.\nPath: ${file.filePath}\nContent:\n${file.fileContent}`,
+            systemPrompt: "You are an AI assistant helping developers understand code. Return a JSON object with: explanation (string), role (string), and functionality (string).",
+            input: `Explain this file's role and functionality in the project.\nPath: ${file.filePath}\nContent:\n${file.fileContent}`,
             jsonMode: true
           }),
         });
@@ -27,10 +27,12 @@ export function FileExplainerPanel({ file }: { file: any }) {
         if (!res.ok) throw new Error("API request failed");
         
         const responseData = await res.json();
+        // responseData.result is the stringified JSON from the model
         const parsed = JSON.parse(responseData.result);
         setData(parsed);
       } catch (error) {
         console.error("Failed to explain file", error);
+        setData({ error: "Failed to load explanation" });
       } finally {
         setLoading(false);
       }
@@ -76,7 +78,10 @@ export function FileExplainerPanel({ file }: { file: any }) {
               </div>
             ) : (
               <div className="prose prose-invert prose-sm max-w-none text-muted-foreground leading-relaxed whitespace-pre-wrap pb-6">
-                {data?.explanation}
+                {/* Safe rendering: Check if field is a string, otherwise stringify or fallback to specific properties */}
+                {typeof data?.explanation === 'string' ? data.explanation : 
+                 typeof data?.role === 'string' ? data.role : 
+                 JSON.stringify(data, null, 2)}
               </div>
             )}
           </ScrollArea>

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { ChevronRight, ChevronDown, File, FileCode, FileText, Package, Folder } from 'lucide-react';
+import { ChevronRight, ChevronDown, File, FileCode, FileText, Package, Folder, Braces, Terminal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FileTreeProps {
@@ -84,15 +84,33 @@ function TreeNode({ node, onSelect, level }: { node: any, onSelect: (f: any) => 
       return <Folder className={cn("w-4 h-4", isOpen ? "text-primary/70" : "text-muted-foreground/50")} />;
     }
     const name = node.name.toLowerCase();
+    
+    // Web / Javascript
     if (name.endsWith('.ts') || name.endsWith('.tsx') || name.endsWith('.js') || name.endsWith('.jsx')) {
       return <FileCode className="w-4 h-4 text-primary" />;
     }
-    if (name.endsWith('.json')) {
+    
+    // Config / Data
+    if (name.endsWith('.json') || name.endsWith('.yaml') || name.endsWith('.yml') || name.endsWith('.toml')) {
       return <Package className="w-4 h-4 text-accent" />;
     }
-    if (name.endsWith('.md')) {
+    
+    // Documentation
+    if (name.endsWith('.md') || name.endsWith('.txt')) {
       return <FileText className="w-4 h-4 text-muted-foreground" />;
     }
+    
+    // Backend Languages
+    if (name.endsWith('.py') || name.endsWith('.pyw')) {
+      return <Terminal className="w-4 h-4 text-blue-400" />;
+    }
+    if (name.endsWith('.cs') || name.endsWith('.java') || name.endsWith('.go') || name.endsWith('.rb') || name.endsWith('.php') || name.endsWith('.rs')) {
+      return <Braces className="w-4 h-4 text-primary/70" />;
+    }
+    if (name.endsWith('.c') || name.endsWith('.cpp') || name.endsWith('.h') || name.endsWith('.hpp')) {
+      return <FileCode className="w-4 h-4 text-muted-foreground" />;
+    }
+
     return <File className="w-4 h-4 text-muted-foreground" />;
   };
 

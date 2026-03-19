@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef } from 'react';
@@ -40,9 +41,21 @@ export default function LandingPage() {
     const filesToProcess = Object.entries(zipContent.files).filter(([path, entry]) => {
       const isDir = entry.dir;
       const isHidden = path.split('/').some(part => part.startsWith('.') && part !== '.');
-      const isBinary = /\.(png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|exe|dll|so|dylib|bin|pyc|woff|woff2|ttf|eot)$/i.test(path);
-      const isLockFile = path.endsWith('package-lock.json') || path.endsWith('yarn.lock') || path.endsWith('pnpm-lock.yaml');
-      const isNodeModules = path.includes('node_modules/');
+      
+      // Comprehensive binary and non-code asset filtering
+      const isBinary = /\.(png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|exe|dll|so|dylib|bin|pyc|pyo|pyd|class|jar|war|ear|db|sqlite|pdb|msi|woff|woff2|ttf|eot|mp3|mp4|mov|avi|wav|ogg|m4a|7z|rar|dmg|iso|pkg|apk)$/i.test(path);
+      
+      // Skip dependency lock files and environment files which are usually noise
+      const isLockFile = /\.(lock|lockb|lock\.json|lock\.yaml|lock\.yml)$/i.test(path) || 
+                         path.endsWith('package-lock.json') || 
+                         path.endsWith('yarn.lock') || 
+                         path.endsWith('pnpm-lock.yaml') ||
+                         path.endsWith('composer.lock') ||
+                         path.endsWith('Gemfile.lock') ||
+                         path.endsWith('mix.lock');
+      
+      const isNodeModules = path.includes('node_modules/') || path.includes('vendor/') || path.includes('.git/');
+      
       return !isDir && !isHidden && !isBinary && !isLockFile && !isNodeModules;
     });
 

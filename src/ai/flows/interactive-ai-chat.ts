@@ -1,16 +1,11 @@
+
 'use server';
 /**
- * @fileOverview An interactive AI chat agent for codebase queries.
+ * @fileOverview This file implements interactive AI chat using the OpenAI SDK.
  */
 
-import { ai, AI_MODEL } from '@/ai/genkit';
-import { z } from 'genkit';
-
-const InteractiveAiChatInputSchema = z.object({
-  query: z.string().describe("The user's question."),
-  codebaseContent: z.string().describe('The codebase context.'),
-});
-export type InteractiveAiChatInput = z.infer<typeof InteractiveAiChatInputSchema>;
+import { openai, AI_MODEL } from '@/ai/genkit';
+import { z } from 'zod';
 
 const InteractiveAiChatOutputSchema = z.object({
   answer: z.string().describe("The AI's answer."),
@@ -35,30 +30,26 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000)
   throw lastError;
 }
 
-export async function interactiveAiChat(input: InteractiveAiChatInput): Promise<InteractiveAiChatOutput> {
-  return callWithRetry(() => interactiveAiChatFlow(input));
-}
-
-const interactiveAiChatFlow = ai.defineFlow(
-  {
-    name: 'interactiveAiChatFlow',
-    inputSchema: InteractiveAiChatInputSchema,
-    outputSchema: InteractiveAiChatOutputSchema,
-  },
-  async (input) => {
-    const { output } = await ai.generate({
+export async function interactiveAiChat(input: { query: string, codebaseContent: string }): Promise<InteractiveAiChatOutput> {
+  return callWithRetry(async () => {
+    const response = await openai.chat.completions.create({
       model: AI_MODEL,
-      prompt: `You are an AI assistant helping a developer understand their codebase. Answer the user's question accurately based on the provided context.
-
-      Context:
-      ${input.codebaseContent}
-
-      User Question:
-      ${input.query}`,
-      output: { schema: InteractiveAiChatOutputSchema },
+      messages: [
+        {
+          role: "system",
+          content: "You are an AI assistant helping a developer understand their codebase. Return a JSON object with a single field 'answer'."
+        },
+        {
+          role: "user",
+          content: `Context:\n${input.codebaseContent}\n\nUser Question:\n${input.query}`
+        }
+      ],
+      response_format: { type: "json_object" }
     });
 
-    if (!output) throw new Error('AI failed to respond to query.');
-    return output;
-  }
-);
+    const content = response.choices[0].message.content;
+    if (!content) throw new Error("AI failed to respond to query.");
+    
+    return JSON.parse(content) as InteractiveAiChatOutput;
+  });
+}

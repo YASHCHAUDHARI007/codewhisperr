@@ -1,15 +1,11 @@
+
 'use server';
 /**
- * @fileOverview This file implements a Genkit flow for generating a high-level overview of a software project.
+ * @fileOverview This file implements AI generation for project overviews using the OpenAI SDK.
  */
 
-import { ai, AI_MODEL } from '@/ai/genkit';
-import { z } from 'genkit';
-
-const AiProjectOverviewInputSchema = z.object({
-  codebaseContent: z.string().describe('The full content of the codebase files.'),
-});
-export type AiProjectOverviewInput = z.infer<typeof AiProjectOverviewInputSchema>;
+import { openai, AI_MODEL } from '@/ai/genkit';
+import { z } from 'zod';
 
 const AiProjectOverviewOutputSchema = z.object({
   summary: z.string().describe("A high-level summary of the project's purpose."),
@@ -37,27 +33,26 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000)
   throw lastError;
 }
 
-export async function aiProjectOverview(input: AiProjectOverviewInput): Promise<AiProjectOverviewOutput> {
-  return callWithRetry(() => aiProjectOverviewFlow(input));
-}
-
-const aiProjectOverviewFlow = ai.defineFlow(
-  {
-    name: 'aiProjectOverviewFlow',
-    inputSchema: AiProjectOverviewInputSchema,
-    outputSchema: AiProjectOverviewOutputSchema,
-  },
-  async (input) => {
-    const { output } = await ai.generate({
+export async function aiProjectOverview(input: { codebaseContent: string }): Promise<AiProjectOverviewOutput> {
+  return callWithRetry(async () => {
+    const response = await openai.chat.completions.create({
       model: AI_MODEL,
-      prompt: `You are an expert software architect. Analyze the provided codebase and return a structured overview including a summary of purpose, the tech stack, and the architecture pattern.
-
-      Codebase:
-      ${input.codebaseContent}`,
-      output: { schema: AiProjectOverviewOutputSchema },
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert software architect. Analyze the codebase and return a JSON object with: summary (string), techStack (array of strings), and architecture (string)."
+        },
+        {
+          role: "user",
+          content: `Analyze the provided codebase and return a structured overview.\n\nCodebase:\n${input.codebaseContent}`
+        }
+      ],
+      response_format: { type: "json_object" }
     });
 
-    if (!output) throw new Error('AI failed to generate project overview.');
-    return output;
-  }
-);
+    const content = response.choices[0].message.content;
+    if (!content) throw new Error("AI failed to generate project overview.");
+    
+    return JSON.parse(content) as AiProjectOverviewOutput;
+  });
+}

@@ -1,19 +1,15 @@
-import { genkit } from 'genkit';
-import { openAI } from 'genkitx-openai';
+
+import OpenAI from 'openai';
 
 /**
- * Initializes Genkit with Groq (or OpenAI-compatible provider) as the exclusive AI provider.
+ * Initializes the OpenAI client configured for Groq.
  */
-export const ai = genkit({
-  plugins: [
-    openAI({
-      apiKey: process.env.GROQ_API_KEY,
-      baseURL: 'https://api.groq.com/openai/v1',
-    }),
-  ],
+export const openai = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1",
 });
 
 /**
- * The specific model identifier for the requested model.
+ * The specific model identifier for Groq.
  */
-export const AI_MODEL = 'openai/gpt-oss-120b';
+export const AI_MODEL = 'llama-3.1-8b-instant';

@@ -1,16 +1,11 @@
+
 'use server';
 /**
- * @fileOverview This file implements a Genkit flow for explaining individual files.
+ * @fileOverview This file implements AI generation for file explanations using the OpenAI SDK.
  */
 
-import { ai, AI_MODEL } from '@/ai/genkit';
-import { z } from 'genkit';
-
-const AiFileModuleExplanationInputSchema = z.object({
-  filePath: z.string().describe('The full path of the file.'),
-  fileContent: z.string().describe('The complete content of the file.'),
-});
-export type AiFileModuleExplanationInput = z.infer<typeof AiFileModuleExplanationInputSchema>;
+import { openai, AI_MODEL } from '@/ai/genkit';
+import { z } from 'zod';
 
 const AiFileModuleExplanationOutputSchema = z.object({
   explanation: z.string().describe("A clear and simple explanation of the file's role."),
@@ -35,27 +30,26 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000)
   throw lastError;
 }
 
-export async function aiFileModuleExplanation(input: AiFileModuleExplanationInput): Promise<AiFileModuleExplanationOutput> {
-  return callWithRetry(() => aiFileModuleExplanationFlow(input));
-}
-
-const aiFileModuleExplanationFlow = ai.defineFlow(
-  {
-    name: 'aiFileModuleExplanationFlow',
-    inputSchema: AiFileModuleExplanationInputSchema,
-    outputSchema: AiFileModuleExplanationOutputSchema,
-  },
-  async (input) => {
-    const { output } = await ai.generate({
+export async function aiFileModuleExplanation(input: { filePath: string, fileContent: string }): Promise<AiFileModuleExplanationOutput> {
+  return callWithRetry(async () => {
+    const response = await openai.chat.completions.create({
       model: AI_MODEL,
-      prompt: `Explain this file's role and functionality in the project.
-      Path: ${input.filePath}
-      Content:
-      ${input.fileContent}`,
-      output: { schema: AiFileModuleExplanationOutputSchema },
+      messages: [
+        {
+          role: "system",
+          content: "You are an AI assistant helping developers understand code. Return a JSON object with a single field 'explanation'."
+        },
+        {
+          role: "user",
+          content: `Explain this file's role and functionality in the project.\nPath: ${input.filePath}\nContent:\n${input.fileContent}`
+        }
+      ],
+      response_format: { type: "json_object" }
     });
 
-    if (!output) throw new Error('AI failed to generate file explanation.');
-    return output;
-  }
-);
+    const content = response.choices[0].message.content;
+    if (!content) throw new Error("AI failed to generate file explanation.");
+    
+    return JSON.parse(content) as AiFileModuleExplanationOutput;
+  });
+}

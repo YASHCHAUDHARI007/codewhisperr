@@ -50,15 +50,10 @@ const aiProjectOverviewFlow = ai.defineFlow(
   async (input) => {
     const { output } = await ai.generate({
       model: AI_MODEL,
-      input: {
-        text: `You are an expert software architect. Analyze the codebase and provide:
-        1. "summary": 1-3 sentences on the purpose.
-        2. "techStack": Array of technologies identified.
-        3. "architecture": Overview of structure.
+      prompt: `You are an expert software architect. Analyze the provided codebase and return a structured overview including a summary of purpose, the tech stack, and the architecture pattern.
 
-        Codebase:
-        ${input.codebaseContent}`,
-      },
+      Codebase:
+      ${input.codebaseContent}`,
       output: { schema: AiProjectOverviewOutputSchema },
     });
 

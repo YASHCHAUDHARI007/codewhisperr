@@ -24,7 +24,7 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000)
       return await fn();
     } catch (error: any) {
       lastError = error;
-      if (error?.message?.includes('429')) {
+      if (error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED')) {
         await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2;
         continue;
@@ -48,12 +48,10 @@ const aiFileModuleExplanationFlow = ai.defineFlow(
   async (input) => {
     const { output } = await ai.generate({
       model: AI_MODEL,
-      input: {
-        text: `Explain this file's role and functionality.
-        Path: ${input.filePath}
-        Content:
-        ${input.fileContent}`,
-      },
+      prompt: `Explain this file's role and functionality in the project.
+      Path: ${input.filePath}
+      Content:
+      ${input.fileContent}`,
       output: { schema: AiFileModuleExplanationOutputSchema },
     });
 

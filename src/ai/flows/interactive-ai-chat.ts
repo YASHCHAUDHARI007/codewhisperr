@@ -24,7 +24,7 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000)
       return await fn();
     } catch (error: any) {
       lastError = error;
-      if (error?.message?.includes('429')) {
+      if (error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED')) {
         await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2;
         continue;
@@ -48,14 +48,13 @@ const interactiveAiChatFlow = ai.defineFlow(
   async (input) => {
     const { output } = await ai.generate({
       model: AI_MODEL,
-      input: {
-        text: `Answer the question based on the codebase context.
-        Context:
-        ${input.codebaseContent}
+      prompt: `You are an AI assistant helping a developer understand their codebase. Answer the user's question accurately based on the provided context.
 
-        Question:
-        ${input.query}`,
-      },
+      Context:
+      ${input.codebaseContent}
+
+      User Question:
+      ${input.query}`,
       output: { schema: InteractiveAiChatOutputSchema },
     });
 

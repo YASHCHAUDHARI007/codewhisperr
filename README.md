@@ -60,11 +60,6 @@ npm run dev
 
 ---
 
-## 🔑 API Setup (Prototype)
-
-For quick testing, API key is directly embedded in the server code.
-For production, use environment variables.
-
 ---
 
 ## 🚀 Deployment

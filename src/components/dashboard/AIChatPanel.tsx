@@ -100,7 +100,7 @@ export function AIChatPanel({ codebaseContent }: { codebaseContent: string }) {
           </Button>
         </form>
         <p className="text-[10px] text-muted-foreground mt-3 text-center uppercase tracking-widest font-bold">
-          Powered by Gemini 1.5 Flash
+          Powered by Groq Llama 3.3
         </p>
       </div>
     </Card>

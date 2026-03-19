@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef } from 'react';
@@ -12,6 +11,7 @@ import { toast } from '@/hooks/use-toast';
 import { useFirestore, useAuth, useUser, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
+import { fetchGithubRepo } from '@/app/actions/github';
 import JSZip from 'jszip';
 
 export default function LandingPage() {
@@ -28,42 +28,43 @@ export default function LandingPage() {
   const ensureAuth = async () => {
     if (!user && !auth.currentUser) {
       initiateAnonymousSignIn(auth);
-      // Give it a moment to initialize
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Give it a moment to initialize auth state
+      await new Promise(resolve => setTimeout(resolve, 1500));
       if (!auth.currentUser) return null;
     }
     return auth.currentUser?.uid || user?.uid || null;
   };
 
   const processZipContent = async (zipContent: JSZip, projectId: string, projectName: string, userId: string) => {
-    // Filter out directories, hidden files, and common large binary formats to optimize
+    // Filter files: Skip directories, hidden files, binaries, and lock files
     const filesToProcess = Object.entries(zipContent.files).filter(([path, entry]) => {
       const isDir = entry.dir;
       const isHidden = path.split('/').some(part => part.startsWith('.') && part !== '.');
-      const isBinary = /\.(png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|exe|dll|so|dylib|bin|pyc)$/i.test(path);
+      const isBinary = /\.(png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|exe|dll|so|dylib|bin|pyc|woff|woff2|ttf|eot)$/i.test(path);
       const isLockFile = path.endsWith('package-lock.json') || path.endsWith('yarn.lock') || path.endsWith('pnpm-lock.yaml');
-      return !isDir && !isHidden && !isBinary && !isLockFile;
+      const isNodeModules = path.includes('node_modules/');
+      return !isDir && !isHidden && !isBinary && !isLockFile && !isNodeModules;
     });
 
     const totalFiles = filesToProcess.length;
     if (totalFiles === 0) {
-      throw new Error("No readable code files found in the archive.");
+      throw new Error("No readable code files found in the repository.");
     }
 
     let processedCount = 0;
     setProcessingStage(`Uploading ${totalFiles} code files...`);
 
-    // Process in batches to stay efficient and avoid Firestore limits
-    const BATCH_SIZE = 20;
+    // Process in batches to stay efficient and avoid rate limits
+    const BATCH_SIZE = 15;
     for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
       const batch = filesToProcess.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async ([path, zipEntry]) => {
         try {
           const fileContent = await zipEntry.async('string');
           
-          // Basic size check - Firestore docs have a 1MB limit
-          if (fileContent.length > 900000) {
-            console.warn(`Skipping ${path}: File too large for direct analysis.`);
+          // Firestore document limit is 1MB. We keep it under 800KB for safety.
+          if (fileContent.length > 800000) {
+            console.warn(`Skipping ${path}: File too large (>800KB).`);
             processedCount++;
             return;
           }
@@ -86,6 +87,7 @@ export default function LandingPage() {
           }, { merge: true });
           
           processedCount++;
+          // Update progress based on total files
           setUploadProgress(Math.round((processedCount / totalFiles) * 100));
         } catch (err) {
           console.error(`Error processing file ${path}:`, err);
@@ -100,8 +102,8 @@ export default function LandingPage() {
       lastAnalysisDate: new Date().toISOString()
     }, { merge: true });
     
-    // Small delay to ensure Firestore cache catches up
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Give Firestore a moment to sync before redirecting
+    await new Promise(resolve => setTimeout(resolve, 1000));
     router.push(`/dashboard/${projectId}`);
   };
 
@@ -111,7 +113,7 @@ export default function LandingPage() {
 
     const userId = await ensureAuth();
     if (!userId) {
-      toast({ title: "Authentication required", description: "Please sign in to upload codebases.", variant: "destructive" });
+      toast({ title: "Authentication required", description: "Please wait a moment and try again.", variant: "destructive" });
       return;
     }
 
@@ -148,7 +150,7 @@ export default function LandingPage() {
 
     const userId = await ensureAuth();
     if (!userId) {
-      toast({ title: "Authentication required", description: "Please sign in to analyze repositories.", variant: "destructive" });
+      toast({ title: "Authentication required", description: "Please wait a moment and try again.", variant: "destructive" });
       return;
     }
 
@@ -157,7 +159,8 @@ export default function LandingPage() {
     setProcessingStage('Validating Repository URL...');
 
     try {
-      const url = githubUrl.replace(/\/$/, '').replace(/\.git$/, '');
+      // Clean up URL
+      const url = githubUrl.trim().replace(/\/$/, '').replace(/\.git$/, '');
       const parts = url.split('/');
       
       let owner = '';
@@ -172,23 +175,23 @@ export default function LandingPage() {
         repo = parts[parts.length - 1];
       }
 
-      if (!owner || !repo) throw new Error("Please use a valid GitHub URL (e.g., github.com/user/repo)");
-
-      setProcessingStage(`Fetching ${owner}/${repo}...`);
-      
-      // Using GitHub's zipball endpoint which is standard for public repos
-      const zipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball`;
-      const response = await fetch(zipUrl);
-      
-      if (!response.ok) {
-        if (response.status === 404) throw new Error("Repository not found. Ensure it is public.");
-        if (response.status === 403) throw new Error("GitHub API rate limit exceeded. Please try again later.");
-        throw new Error(`GitHub returned an error (${response.status}).`);
+      if (!owner || !repo) {
+        throw new Error("Invalid URL. Expected format: https://github.com/user/repo");
       }
+
+      setProcessingStage(`Fetching ${owner}/${repo} from GitHub...`);
       
-      const blob = await response.blob();
+      // Call Server Action to fetch ZIP (bypasses CORS)
+      const result = await fetchGithubRepo(owner, repo);
+      
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      setProcessingStage('Extracting repository structure...');
       const zip = new JSZip();
-      const content = await zip.loadAsync(blob);
+      // Load from base64 string
+      const content = await zip.loadAsync(result.data!, { base64: true });
       
       const projectId = doc(collection(db, 'temp')).id;
       const projectRef = doc(db, 'users', userId, 'projects', projectId);
@@ -206,7 +209,7 @@ export default function LandingPage() {
     } catch (error: any) {
       toast({ 
         title: "Ingestion Failed", 
-        description: error.message || "An unexpected error occurred during ingestion.", 
+        description: error.message || "An unexpected error occurred.", 
         variant: "destructive" 
       });
       setIsProcessing(false);
@@ -259,7 +262,7 @@ export default function LandingPage() {
 
       <div className="relative z-10 w-full max-w-4xl space-y-12 text-center">
         <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-4" onClick={() => router.push('/')}>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-4">
             <Zap className="w-4 h-4" />
             <span>AI-Powered Code Intelligence</span>
           </div>
@@ -304,7 +307,7 @@ export default function LandingPage() {
             <form onSubmit={handleGithubIngest} className="w-full space-y-4">
               <div className="space-y-2">
                 <h3 className="text-xl font-headline font-semibold">GitHub Repo</h3>
-                <p className="text-sm text-muted-foreground">Clone and analyze public repositories.</p>
+                <p className="text-sm text-muted-foreground">Analyze public repositories via URL.</p>
               </div>
               <Input 
                 placeholder="https://github.com/user/repo" 
@@ -335,7 +338,7 @@ export default function LandingPage() {
             </div>
             <div className="flex items-center gap-2">
               <Code2 className="w-4 h-4" />
-              <span>Tech Stack Auto-Detection</span>
+              <span>Tech Stack Detection</span>
             </div>
           </div>
         </div>

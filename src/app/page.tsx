@@ -26,55 +26,82 @@ export default function LandingPage() {
   const { user } = useUser();
 
   const ensureAuth = async () => {
-    if (!user) {
+    if (!user && !auth.currentUser) {
       initiateAnonymousSignIn(auth);
-      return null;
+      // Give it a moment to initialize
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!auth.currentUser) return null;
     }
-    return user.uid;
+    return auth.currentUser?.uid || user?.uid || null;
   };
 
   const processZipContent = async (zipContent: JSZip, projectId: string, projectName: string, userId: string) => {
-    const filesToProcess = Object.entries(zipContent.files).filter(([_, entry]) => !entry.dir);
+    // Filter out directories, hidden files, and common large binary formats to optimize
+    const filesToProcess = Object.entries(zipContent.files).filter(([path, entry]) => {
+      const isDir = entry.dir;
+      const isHidden = path.split('/').some(part => part.startsWith('.') && part !== '.');
+      const isBinary = /\.(png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|exe|dll|so|dylib|bin|pyc)$/i.test(path);
+      const isLockFile = path.endsWith('package-lock.json') || path.endsWith('yarn.lock') || path.endsWith('pnpm-lock.yaml');
+      return !isDir && !isHidden && !isBinary && !isLockFile;
+    });
+
     const totalFiles = filesToProcess.length;
+    if (totalFiles === 0) {
+      throw new Error("No readable code files found in the archive.");
+    }
+
     let processedCount = 0;
+    setProcessingStage(`Uploading ${totalFiles} code files...`);
 
-    setProcessingStage(`Uploading ${totalFiles} files...`);
-
-    // Process in batches to avoid overwhelming the browser and Firestore
-    const BATCH_SIZE = 15;
+    // Process in batches to stay efficient and avoid Firestore limits
+    const BATCH_SIZE = 20;
     for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
       const batch = filesToProcess.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async ([path, zipEntry]) => {
-        const fileContent = await zipEntry.async('string');
-        const fileId = doc(collection(db, 'temp')).id;
-        
-        // Clean path (strip leading slashes and potential root dir from GitHub zipballs)
-        let cleanPath = path.replace(/^\/+/, '');
-        const pathParts = cleanPath.split('/');
-        // GitHub zipballs usually have a root folder like owner-repo-sha/
-        // If we have more than one part, we might want to check if the first part is that root folder
-        // but for now, we'll just store the path as is provided by the zip structure.
+        try {
+          const fileContent = await zipEntry.async('string');
+          
+          // Basic size check - Firestore docs have a 1MB limit
+          if (fileContent.length > 900000) {
+            console.warn(`Skipping ${path}: File too large for direct analysis.`);
+            processedCount++;
+            return;
+          }
 
-        const fileRef = doc(db, 'users', userId, 'projects', projectId, 'codeFiles', fileId);
-        
-        setDocumentNonBlocking(fileRef, {
-          id: fileId,
-          projectId: projectId,
-          userId: userId,
-          filePath: cleanPath,
-          fileName: pathParts[pathParts.length - 1] || '',
-          fileContent: fileContent,
-          fileExtension: cleanPath.split('.').pop() || ''
-        }, { merge: true });
-        
-        processedCount++;
-        setUploadProgress(Math.round((processedCount / totalFiles) * 100));
+          const fileId = doc(collection(db, 'temp')).id;
+          const cleanPath = path.replace(/^\/+/, '');
+          const pathParts = cleanPath.split('/');
+
+          const fileRef = doc(db, 'users', userId, 'projects', projectId, 'codeFiles', fileId);
+          
+          setDocumentNonBlocking(fileRef, {
+            id: fileId,
+            projectId: projectId,
+            userId: userId,
+            filePath: cleanPath,
+            fileName: pathParts[pathParts.length - 1] || '',
+            fileContent: fileContent,
+            fileExtension: cleanPath.split('.').pop() || '',
+            lastAnalyzedDate: new Date().toISOString()
+          }, { merge: true });
+          
+          processedCount++;
+          setUploadProgress(Math.round((processedCount / totalFiles) * 100));
+        } catch (err) {
+          console.error(`Error processing file ${path}:`, err);
+        }
       }));
     }
 
     setProcessingStage('Finalizing analysis...');
     const projectRef = doc(db, 'users', userId, 'projects', projectId);
-    setDocumentNonBlocking(projectRef, { status: 'analyzed' }, { merge: true });
+    setDocumentNonBlocking(projectRef, { 
+      status: 'analyzed',
+      lastAnalysisDate: new Date().toISOString()
+    }, { merge: true });
+    
+    // Small delay to ensure Firestore cache catches up
+    await new Promise(resolve => setTimeout(resolve, 500));
     router.push(`/dashboard/${projectId}`);
   };
 
@@ -84,7 +111,7 @@ export default function LandingPage() {
 
     const userId = await ensureAuth();
     if (!userId) {
-      toast({ title: "Signing you in...", description: "Please try uploading again in a second." });
+      toast({ title: "Authentication required", description: "Please sign in to upload codebases.", variant: "destructive" });
       return;
     }
 
@@ -109,9 +136,8 @@ export default function LandingPage() {
       }, { merge: true });
 
       await processZipContent(content, projectId, projectName, userId);
-    } catch (error) {
-      console.error(error);
-      toast({ title: "Upload Failed", description: "Could not process the ZIP file.", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: "Upload Failed", description: error.message || "Could not process the ZIP file.", variant: "destructive" });
       setIsProcessing(false);
     }
   };
@@ -121,15 +147,17 @@ export default function LandingPage() {
     if (!githubUrl) return;
 
     const userId = await ensureAuth();
-    if (!userId) return;
+    if (!userId) {
+      toast({ title: "Authentication required", description: "Please sign in to analyze repositories.", variant: "destructive" });
+      return;
+    }
 
     setIsProcessing(true);
     setUploadProgress(0);
-    setProcessingStage('Connecting to GitHub...');
+    setProcessingStage('Validating Repository URL...');
 
     try {
-      // Robust GitHub URL parsing
-      const url = githubUrl.replace(/\/$/, '');
+      const url = githubUrl.replace(/\/$/, '').replace(/\.git$/, '');
       const parts = url.split('/');
       
       let owner = '';
@@ -140,21 +168,22 @@ export default function LandingPage() {
         owner = parts[githubIndex + 1];
         repo = parts[githubIndex + 2];
       } else {
-        // Fallback for user/repo format
         owner = parts[parts.length - 2];
         repo = parts[parts.length - 1];
       }
 
-      if (!owner || !repo) throw new Error("Invalid GitHub URL. Use format: github.com/user/repo");
+      if (!owner || !repo) throw new Error("Please use a valid GitHub URL (e.g., github.com/user/repo)");
 
-      setProcessingStage(`Fetching ${owner}/${repo} archive...`);
+      setProcessingStage(`Fetching ${owner}/${repo}...`);
       
-      // Fetching the zipball is much more efficient than recursive API calls for large repos
-      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/zipball`);
+      // Using GitHub's zipball endpoint which is standard for public repos
+      const zipUrl = `https://api.github.com/repos/${owner}/${repo}/zipball`;
+      const response = await fetch(zipUrl);
       
       if (!response.ok) {
-        if (response.status === 404) throw new Error("Repository not found or is private.");
-        throw new Error("Failed to fetch repository from GitHub.");
+        if (response.status === 404) throw new Error("Repository not found. Ensure it is public.");
+        if (response.status === 403) throw new Error("GitHub API rate limit exceeded. Please try again later.");
+        throw new Error(`GitHub returned an error (${response.status}).`);
       }
       
       const blob = await response.blob();
@@ -175,7 +204,11 @@ export default function LandingPage() {
 
       await processZipContent(content, projectId, repo, userId);
     } catch (error: any) {
-      toast({ title: "Ingestion Failed", description: error.message, variant: "destructive" });
+      toast({ 
+        title: "Ingestion Failed", 
+        description: error.message || "An unexpected error occurred during ingestion.", 
+        variant: "destructive" 
+      });
       setIsProcessing(false);
     }
   };
@@ -226,7 +259,7 @@ export default function LandingPage() {
 
       <div className="relative z-10 w-full max-w-4xl space-y-12 text-center">
         <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-4" onClick={() => router.push('/')}>
             <Zap className="w-4 h-4" />
             <span>AI-Powered Code Intelligence</span>
           </div>

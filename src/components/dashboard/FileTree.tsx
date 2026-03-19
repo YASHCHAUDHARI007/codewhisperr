@@ -15,19 +15,32 @@ export function FileTree({ files, onSelect }: FileTreeProps) {
   const tree = useMemo(() => {
     const root: any = { name: 'root', type: 'directory', children: {} };
     
-    // Sort files by path length and alphabetical order to ensure folders are processed correctly
+    // Sort files by path length and alphabetical order
     const sortedFiles = [...files].sort((a, b) => a.filePath.localeCompare(b.filePath));
 
-    sortedFiles.forEach(file => {
-      // Filter out empty parts and leading slashes
-      const parts = file.filePath.split('/').filter(Boolean);
-      
-      // If the path comes from a GitHub zip, it might have a root folder like owner-repo-sha/
-      // We skip the very first part if there's more than one, to keep the tree clean
-      // Actually, it's safer to keep it or handle it at ingestion. 
-      // For now, let's just make sure we handle the nesting.
+    // Detect if there's a common root folder (typical for GitHub zipballs)
+    let commonRoot: string | null = null;
+    if (sortedFiles.length > 0) {
+      const firstPathParts = sortedFiles[0].filePath.split('/');
+      if (firstPathParts.length > 1) {
+        const potentialRoot = firstPathParts[0];
+        const allHaveSameRoot = sortedFiles.every(f => f.filePath.startsWith(potentialRoot + '/'));
+        if (allHaveSameRoot) {
+          commonRoot = potentialRoot;
+        }
+      }
+    }
 
+    sortedFiles.forEach(file => {
+      let filePath = file.filePath;
+      // Strip common root if it exists
+      if (commonRoot && filePath.startsWith(commonRoot + '/')) {
+        filePath = filePath.substring(commonRoot.length + 1);
+      }
+
+      const parts = filePath.split('/').filter(Boolean);
       let current = root;
+
       parts.forEach((part, i) => {
         if (i === parts.length - 1) {
           current.children[part] = { ...file, name: part, type: 'file' };
@@ -56,7 +69,7 @@ export function FileTree({ files, onSelect }: FileTreeProps) {
 }
 
 function TreeNode({ node, onSelect, level }: { node: any, onSelect: (f: any) => void, level: number }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(level === 0); // Open root level folders by default
 
   const toggle = () => {
     if (node.type === 'directory') {

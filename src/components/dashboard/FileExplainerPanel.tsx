@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Code, Sparkles } from 'lucide-react';
+import { Code, Sparkles, Loader2, BrainCircuit } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 export function FileExplainerPanel({ file }: { file: any }) {
@@ -18,8 +18,8 @@ export function FileExplainerPanel({ file }: { file: any }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-            systemPrompt: "You are an AI assistant helping developers understand code. Return a JSON object with: explanation (string), role (string), and functionality (string).",
-            input: `Explain this file's role and functionality in the project.\nPath: ${file.filePath}\nContent:\n${file.fileContent}`,
+            systemPrompt: "Explain this file's role and logic. Return JSON with: explanation (string). Be direct.",
+            input: `Path: ${file.filePath}\nContent:\n${file.fileContent.slice(0, 5000)}`,
             jsonMode: true
           }),
         });
@@ -27,12 +27,11 @@ export function FileExplainerPanel({ file }: { file: any }) {
         if (!res.ok) throw new Error("API request failed");
         
         const responseData = await res.json();
-        // responseData.result is the stringified JSON from the model
         const parsed = JSON.parse(responseData.result);
         setData(parsed);
       } catch (error) {
         console.error("Failed to explain file", error);
-        setData({ error: "Failed to load explanation" });
+        setData({ explanation: "Failed to load explanation. The file might be too large or invalid." });
       } finally {
         setLoading(false);
       }
@@ -71,17 +70,19 @@ export function FileExplainerPanel({ file }: { file: any }) {
         <CardContent className="flex-1 min-h-0 overflow-hidden">
           <ScrollArea className="h-full">
             {loading ? (
-              <div className="space-y-4">
-                <Skeleton className="h-4 w-full bg-muted" />
-                <Skeleton className="h-4 w-5/6 bg-muted" />
-                <Skeleton className="h-4 w-4/6 bg-muted" />
+              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                <div className="relative">
+                  <Loader2 className="w-10 h-10 text-accent animate-spin" />
+                  <BrainCircuit className="w-4 h-4 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                </div>
+                <div>
+                  <h4 className="font-headline font-bold text-white">Synthesizing Logic</h4>
+                  <p className="text-xs text-muted-foreground">Breaking down functions and dependencies...</p>
+                </div>
               </div>
             ) : (
-              <div className="prose prose-invert prose-sm max-w-none text-muted-foreground leading-relaxed whitespace-pre-wrap pb-6">
-                {/* Safe rendering: Check if field is a string, otherwise stringify or fallback to specific properties */}
-                {typeof data?.explanation === 'string' ? data.explanation : 
-                 typeof data?.role === 'string' ? data.role : 
-                 JSON.stringify(data, null, 2)}
+              <div className="prose prose-invert prose-sm max-w-none text-muted-foreground leading-relaxed whitespace-pre-wrap pb-6 px-4">
+                {data?.explanation || "No explanation available."}
               </div>
             )}
           </ScrollArea>

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Zap, Boxes, Layers, CheckCircle2 } from 'lucide-react';
+import { Zap, Boxes, Layers, CheckCircle2, Loader2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 export function ProjectOverviewPanel({ codebaseContent }: { codebaseContent: string }) {
@@ -20,8 +20,8 @@ export function ProjectOverviewPanel({ codebaseContent }: { codebaseContent: str
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-            systemPrompt: "You are an expert software architect. Analyze the codebase and return a JSON object with: summary (string), techStack (array of strings), and architecture (string).",
-            prompt: `Analyze the provided codebase and return a structured overview.\n\nCodebase:\n${codebaseContent}`,
+            systemPrompt: "Analyze the code and return JSON with: summary (string), techStack (array), architecture (string). Be extremely concise.",
+            prompt: `Codebase Extract:\n${codebaseContent}`,
             jsonMode: true
           }),
         });
@@ -42,19 +42,19 @@ export function ProjectOverviewPanel({ codebaseContent }: { codebaseContent: str
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="col-span-1 md:col-span-2 bg-card/50 border-white/5">
-          <CardHeader><Skeleton className="h-8 w-1/3 bg-muted" /></CardHeader>
-          <CardContent><Skeleton className="h-24 w-full bg-muted" /></CardContent>
-        </Card>
-        <Card className="bg-card/50 border-white/5">
-          <CardHeader><Skeleton className="h-8 w-1/2 bg-muted" /></CardHeader>
-          <CardContent><div className="flex gap-2"><Skeleton className="h-6 w-16 bg-muted" /><Skeleton className="h-6 w-16 bg-muted" /></div></CardContent>
-        </Card>
-        <Card className="bg-card/50 border-white/5">
-          <CardHeader><Skeleton className="h-8 w-1/2 bg-muted" /></CardHeader>
-          <CardContent><Skeleton className="h-20 w-full bg-muted" /></CardContent>
-        </Card>
+      <div className="flex flex-col items-center justify-center h-full space-y-8 py-12">
+        <div className="relative">
+          <Loader2 className="w-12 h-12 text-primary animate-spin" />
+          <Zap className="w-5 h-5 text-accent absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        </div>
+        <div className="text-center space-y-2">
+          <h3 className="text-xl font-headline font-bold">Generating Overview</h3>
+          <p className="text-sm text-muted-foreground">Mapping modules and detecting tech stack...</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl opacity-40">
+           <Skeleton className="h-40 w-full bg-white/5" />
+           <Skeleton className="h-40 w-full bg-white/5" />
+        </div>
       </div>
     );
   }

@@ -36,11 +36,13 @@ export default function DashboardPage() {
   const { data: project, isLoading: isProjectLoading } = useDoc(projectRef);
   const { data: files, isLoading: isFilesLoading } = useCollection(filesRef);
 
-  const codebaseText = useMemo(() => {
+  // OPTIMIZATION: Light summary for Overview (Only first 5 files, limited content)
+  const overviewContext = useMemo(() => {
     if (!files) return "";
     return files
-      .map((f) => `FILE: ${f.filePath}\nCONTENT:\n${f.fileContent}\n---`)
-      .join('\n');
+      .slice(0, 8) // Sample more for a better overview, but keep it manageable
+      .map((f) => `FILE: ${f.filePath}\nCONTENT: ${f.fileContent.slice(0, 1500)}...`)
+      .join('\n---\n');
   }, [files]);
 
   const selectedFile = useMemo(() => {
@@ -71,7 +73,6 @@ export default function DashboardPage() {
     );
   }
 
-  // Waiting screen for processing status
   if (project.status === 'processing') {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-background p-6 text-center space-y-12">
@@ -135,9 +136,6 @@ export default function DashboardPage() {
               <Button variant="outline" size="sm" className="border-white/5 bg-white/5 text-xs font-medium" onClick={() => router.push('/')}>
                 Back Home
               </Button>
-              <Button size="sm" className="bg-primary text-primary-foreground text-xs font-medium">
-                Export Analysis
-              </Button>
             </div>
           </header>
 
@@ -145,15 +143,15 @@ export default function DashboardPage() {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
               <div className="flex items-center justify-between mb-6">
                 <TabsList className="bg-card/50 border border-white/5 p-1">
-                  <TabsTrigger value="overview" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                  <TabsTrigger value="overview" className="gap-2">
                     <LayoutDashboard className="w-4 h-4" />
                     Overview
                   </TabsTrigger>
-                  <TabsTrigger value="explain" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                  <TabsTrigger value="explain" className="gap-2">
                     <Info className="w-4 h-4" />
                     Explain File
                   </TabsTrigger>
-                  <TabsTrigger value="chat" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                  <TabsTrigger value="chat" className="gap-2">
                     <MessageSquare className="w-4 h-4" />
                     Ask AI
                   </TabsTrigger>
@@ -162,7 +160,7 @@ export default function DashboardPage() {
 
               <div className="flex-1 min-h-0 overflow-hidden">
                 <TabsContent value="overview" className="h-full mt-0 focus-visible:ring-0">
-                  <ProjectOverviewPanel codebaseContent={codebaseText} />
+                  <ProjectOverviewPanel codebaseContent={overviewContext} />
                 </TabsContent>
                 
                 <TabsContent value="explain" className="h-full mt-0 focus-visible:ring-0">
@@ -182,7 +180,7 @@ export default function DashboardPage() {
                 </TabsContent>
 
                 <TabsContent value="chat" className="h-full mt-0 focus-visible:ring-0">
-                  <AIChatPanel codebaseContent={codebaseText} />
+                  <AIChatPanel selectedFile={selectedFile} />
                 </TabsContent>
               </div>
             </Tabs>

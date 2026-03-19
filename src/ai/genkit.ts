@@ -2,7 +2,7 @@ import { genkit } from 'genkit';
 import { openAI } from 'genkitx-openai';
 
 /**
- * Initializes Genkit with Groq as the exclusive AI provider via the OpenAI plugin.
+ * Initializes Genkit with Groq (or OpenAI-compatible provider) as the exclusive AI provider.
  */
 export const ai = genkit({
   plugins: [
@@ -14,6 +14,6 @@ export const ai = genkit({
 });
 
 /**
- * The specific model identifier for Groq's Llama 3 8B model.
+ * The specific model identifier for the requested model.
  */
-export const AI_MODEL = 'openai/llama3-8b-8192';
+export const AI_MODEL = 'openai/gpt-oss-120b';

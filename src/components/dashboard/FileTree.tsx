@@ -1,21 +1,51 @@
+
 "use client";
 
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, File, Folder, FileCode, FileText, Settings, Package } from 'lucide-react';
+import { ChevronRight, ChevronDown, File, FileCode, FileText, Package, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { FileNode } from '@/app/lib/mock-codebase';
 
 interface FileTreeProps {
-  node: FileNode;
-  onSelect: (node: FileNode) => void;
-  level?: number;
+  files: any[];
+  onSelect: (file: any) => void;
 }
 
-export function FileTree({ node, onSelect, level = 0 }: FileTreeProps) {
-  const [isOpen, setIsOpen] = useState(level === 0);
+export function FileTree({ files, onSelect }: FileTreeProps) {
+  // Reconstruct tree from flat files
+  const tree = useMemo(() => {
+    const root: any = { name: 'root', type: 'directory', children: {} };
+    files.forEach(file => {
+      const parts = file.filePath.split('/');
+      let current = root;
+      parts.forEach((part, i) => {
+        if (i === parts.length - 1) {
+          current.children[part] = { ...file, name: part, type: 'file' };
+        } else {
+          if (!current.children[part]) {
+            current.children[part] = { name: part, type: 'directory', children: {} };
+          }
+          current = current.children[part];
+        }
+      });
+    });
+    return root;
+  }, [files]);
 
-  const toggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  return (
+    <div className="space-y-1">
+      {Object.values(tree.children).map((node: any, idx) => (
+        <TreeNode key={idx} node={node} onSelect={onSelect} level={0} />
+      ))}
+    </div>
+  );
+}
+
+import { useMemo } from 'react';
+
+function TreeNode({ node, onSelect, level }: { node: any, onSelect: (f: any) => void, level: number }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const toggle = () => {
     if (node.type === 'directory') {
       setIsOpen(!isOpen);
     } else {
@@ -25,46 +55,45 @@ export function FileTree({ node, onSelect, level = 0 }: FileTreeProps) {
 
   const getIcon = () => {
     if (node.type === 'directory') {
-      return isOpen ? (
-        <ChevronDown className="w-4 h-4 text-muted-foreground" />
-      ) : (
-        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-      );
+      return isOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />;
     }
-    
-    if (node.name.endsWith('.ts') || node.name.endsWith('.tsx') || node.name.endsWith('.js')) {
+    const name = node.name.toLowerCase();
+    if (name.endsWith('.ts') || name.endsWith('.tsx') || name.endsWith('.js') || name.endsWith('.jsx')) {
       return <FileCode className="w-4 h-4 text-primary" />;
     }
-    if (node.name.endsWith('.json')) {
+    if (name.endsWith('.json')) {
       return <Package className="w-4 h-4 text-accent" />;
     }
-    if (node.name.endsWith('.md')) {
+    if (name.endsWith('.md')) {
       return <FileText className="w-4 h-4 text-muted-foreground" />;
     }
     return <File className="w-4 h-4 text-muted-foreground" />;
   };
 
   return (
-    <div className="select-none">
+    <div>
       <div
         className={cn(
-          "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors",
-          "hover:bg-white/5",
-          level === 0 && "font-semibold text-white mb-1"
+          "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors hover:bg-white/5",
+          node.type === 'file' && "group"
         )}
         style={{ paddingLeft: `${level * 12 + 8}px` }}
         onClick={toggle}
       >
-        <span className="shrink-0">{getIcon()}</span>
-        <span className={cn("truncate", node.type === 'directory' ? "text-sidebar-foreground" : "text-muted-foreground group-hover:text-white")}>
+        <span className="shrink-0">
+          {node.type === 'directory' ? <Folder className="w-4 h-4 text-muted-foreground/50" /> : getIcon()}
+        </span>
+        <span className={cn("truncate", node.type === 'directory' ? "text-sidebar-foreground font-medium" : "text-muted-foreground group-hover:text-white")}>
           {node.name}
         </span>
+        {node.type === 'directory' && (
+          <span className="ml-auto">{isOpen ? <ChevronDown className="w-3 h-3 text-muted-foreground/30" /> : <ChevronRight className="w-3 h-3 text-muted-foreground/30" />}</span>
+        )}
       </div>
-      
-      {node.type === 'directory' && isOpen && node.children && (
-        <div className="mt-0.5">
-          {node.children.map((child, idx) => (
-            <FileTree key={idx} node={child} onSelect={onSelect} level={level + 1} />
+      {node.type === 'directory' && isOpen && (
+        <div className="mt-1">
+          {Object.values(node.children).map((child: any, idx) => (
+            <TreeNode key={idx} node={child} onSelect={onSelect} level={level + 1} />
           ))}
         </div>
       )}

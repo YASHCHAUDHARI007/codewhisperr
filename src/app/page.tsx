@@ -1,45 +1,161 @@
+
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, Github, Zap, Shield, Search, ArrowRight, Code2 } from 'lucide-react';
+import { Upload, Github, Zap, Shield, Search, ArrowRight, Code2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
+import { useFirestore, useAuth, useUser, setDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
+import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
+import JSZip from 'jszip';
 
 export default function LandingPage() {
   const [githubUrl, setGithubUrl] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const db = useFirestore();
+  const auth = useAuth();
+  const { user } = useUser();
 
-  const handleDemo = () => {
-    setIsUploading(true);
-    setTimeout(() => {
-      router.push('/dashboard/demo');
-    }, 1500);
+  const ensureAuth = async () => {
+    if (!user) {
+      initiateAnonymousSignIn(auth);
+      // We don't await because it's non-blocking, but the provider will update state.
+      // For the sake of the next immediate operation, we wait a beat or let the user try again.
+      return null;
+    }
+    return user.uid;
   };
 
-  const handleIngest = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!githubUrl) {
-      toast({
-        title: "Missing URL",
-        description: "Please enter a valid GitHub repository URL.",
-        variant: "destructive"
-      });
+  const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const userId = await ensureAuth();
+    if (!userId) {
+      toast({ title: "Signing you in...", description: "Please try uploading again in a second." });
       return;
     }
-    setIsUploading(true);
-    // In a real app, we'd trigger the backend ingestion here
-    setTimeout(() => {
-      router.push('/dashboard/demo');
-    }, 2000);
+
+    setIsProcessing(true);
+    try {
+      const zip = new JSZip();
+      const content = await zip.loadAsync(file);
+      const projectId = doc(collection(db, 'temp')).id;
+      const projectName = file.name.replace('.zip', '');
+
+      // Create Project Doc
+      const projectRef = doc(db, 'users', userId, 'projects', projectId);
+      setDocumentNonBlocking(projectRef, {
+        id: projectId,
+        userId: userId,
+        name: projectName,
+        status: 'processing',
+        uploadDate: new Date().toISOString(),
+        uploadFileName: file.name
+      }, { merge: true });
+
+      // Process files
+      const filePromises: Promise<void>[] = [];
+      for (const [path, zipEntry] of Object.entries(content.files)) {
+        if (!zipEntry.dir) {
+          filePromises.push((async () => {
+            const fileContent = await zipEntry.async('string');
+            const fileId = doc(collection(db, 'temp')).id;
+            const fileRef = doc(db, 'users', userId, 'projects', projectId, 'codeFiles', fileId);
+            setDocumentNonBlocking(fileRef, {
+              id: fileId,
+              projectId: projectId,
+              userId: userId,
+              filePath: path,
+              fileName: path.split('/').pop() || '',
+              fileContent: fileContent,
+              fileExtension: path.split('.').pop() || ''
+            }, { merge: true });
+          })());
+        }
+      }
+
+      await Promise.all(filePromises);
+      
+      setDocumentNonBlocking(projectRef, { status: 'analyzed' }, { merge: true });
+      router.push(`/dashboard/${projectId}`);
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Upload Failed", description: "Could not process the ZIP file.", variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleGithubIngest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!githubUrl) return;
+
+    const userId = await ensureAuth();
+    if (!userId) return;
+
+    setIsProcessing(true);
+    try {
+      // Basic GitHub API fetch (public repos)
+      // Format: https://github.com/owner/repo
+      const parts = githubUrl.split('/');
+      const owner = parts[parts.length - 2];
+      const repo = parts[parts.length - 1];
+
+      if (!owner || !repo) throw new Error("Invalid GitHub URL");
+
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents`);
+      if (!response.ok) throw new Error("Repo not found or private");
+      
+      const contents = await response.json();
+      const projectId = doc(collection(db, 'temp')).id;
+
+      const projectRef = doc(db, 'users', userId, 'projects', projectId);
+      setDocumentNonBlocking(projectRef, {
+        id: projectId,
+        userId: userId,
+        name: repo,
+        status: 'processing',
+        uploadDate: new Date().toISOString(),
+        sourceUrl: githubUrl
+      }, { merge: true });
+
+      // Recursive fetch would be better, but for MVP we fetch top-level or files we can see
+      for (const item of contents) {
+        if (item.type === 'file') {
+          const fileRes = await fetch(item.download_url);
+          const fileContent = await fileRes.text();
+          const fileId = doc(collection(db, 'temp')).id;
+          const fileRef = doc(db, 'users', userId, 'projects', projectId, 'codeFiles', fileId);
+          setDocumentNonBlocking(fileRef, {
+            id: fileId,
+            projectId: projectId,
+            userId: userId,
+            filePath: item.path,
+            fileName: item.name,
+            fileContent: fileContent,
+            fileExtension: item.name.split('.').pop() || ''
+          }, { merge: true });
+        }
+      }
+
+      setDocumentNonBlocking(projectRef, { status: 'analyzed' }, { merge: true });
+      router.push(`/dashboard/${projectId}`);
+    } catch (error: any) {
+      toast({ title: "Ingestion Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
-      {/* Background Glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/10 rounded-full blur-[120px]" />
@@ -68,13 +184,21 @@ export default function LandingPage() {
               <h3 className="text-xl font-headline font-semibold">Upload ZIP</h3>
               <p className="text-sm text-muted-foreground">Directly analyze local projects or legacy codebases.</p>
             </div>
+            <input 
+              type="file" 
+              accept=".zip" 
+              className="hidden" 
+              ref={fileInputRef} 
+              onChange={handleZipUpload}
+            />
             <Button 
               variant="outline" 
               className="w-full border-white/10 hover:bg-white/5"
-              onClick={handleDemo}
-              disabled={isUploading}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessing}
             >
-              Select File
+              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Select File"}
+              {isProcessing ? "Processing..." : "Select File"}
             </Button>
           </Card>
 
@@ -82,10 +206,10 @@ export default function LandingPage() {
             <div className="p-4 rounded-2xl bg-accent/10 group-hover:bg-accent/20 transition-colors">
               <Github className="w-10 h-10 text-accent" />
             </div>
-            <form onSubmit={handleIngest} className="w-full space-y-4">
+            <form onSubmit={handleGithubIngest} className="w-full space-y-4">
               <div className="space-y-2">
                 <h3 className="text-xl font-headline font-semibold">GitHub Repo</h3>
-                <p className="text-sm text-muted-foreground">Clone and analyze public or private repositories.</p>
+                <p className="text-sm text-muted-foreground">Clone and analyze public repositories.</p>
               </div>
               <Input 
                 placeholder="https://github.com/user/repo" 
@@ -96,9 +220,10 @@ export default function LandingPage() {
               <Button 
                 className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
                 type="submit"
-                disabled={isUploading}
+                disabled={isProcessing || !githubUrl}
               >
-                {isUploading ? "Processing..." : "Analyze Repo"}
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Analyze Repo"}
+                {isProcessing ? "Processing..." : "Analyze Repo"}
               </Button>
             </form>
           </Card>
@@ -112,7 +237,7 @@ export default function LandingPage() {
             </div>
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4" />
-              <span>Deep Inpection</span>
+              <span>Deep Inspection</span>
             </div>
             <div className="flex items-center gap-2">
               <Code2 className="w-4 h-4" />
@@ -120,14 +245,6 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-
-        <Button 
-          variant="link" 
-          className="text-muted-foreground hover:text-white"
-          onClick={handleDemo}
-        >
-          Try Demo Project <ArrowRight className="w-4 h-4 ml-1" />
-        </Button>
       </div>
     </div>
   );

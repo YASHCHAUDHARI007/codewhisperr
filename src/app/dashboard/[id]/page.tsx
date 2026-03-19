@@ -1,35 +1,74 @@
+
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { SidebarProvider, Sidebar, SidebarContent, SidebarHeader, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { FileTree } from '@/components/dashboard/FileTree';
 import { ProjectOverviewPanel } from '@/components/dashboard/ProjectOverviewPanel';
 import { AIChatPanel } from '@/components/dashboard/AIChatPanel';
 import { FileExplainerPanel } from '@/components/dashboard/FileExplainerPanel';
-import { MOCK_CODEBASE, FileNode, flattenCodebase } from '@/app/lib/mock-codebase';
-import { Code2, LayoutDashboard, MessageSquare, Info, ChevronRight, Menu } from 'lucide-react';
+import { Code2, LayoutDashboard, MessageSquare, Info, ChevronRight, Loader2 } from 'lucide-react';
+import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
+import { useParams } from 'next/navigation';
 
-export default function DashboardPage({ params }: { params: { id: string } }) {
-  const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
+export default function DashboardPage() {
+  const { id: projectId } = useParams() as { id: string };
+  const { user, isUserLoading } = useUser();
+  const db = useFirestore();
+
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
-  
-  const codebaseText = useMemo(() => {
-    const flattened = flattenCodebase(MOCK_CODEBASE);
-    return Object.entries(flattened)
-      .map(([path, content]) => `FILE: ${path}\nCONTENT:\n${content}\n---`)
-      .join('\n');
-  }, []);
 
-  const handleFileSelect = (node: FileNode) => {
-    if (node.type === 'file') {
-      setSelectedFile(node);
-      setActiveTab('explain');
-    }
+  const projectRef = useMemoFirebase(() => {
+    if (!db || !user || !projectId) return null;
+    return doc(db, 'users', user.uid, 'projects', projectId);
+  }, [db, user, projectId]);
+
+  const filesRef = useMemoFirebase(() => {
+    if (!db || !user || !projectId) return null;
+    return collection(db, 'users', user.uid, 'projects', projectId, 'codeFiles');
+  }, [db, user, projectId]);
+
+  const { data: project, isLoading: isProjectLoading } = useDoc(projectRef);
+  const { data: files, isLoading: isFilesLoading } = useCollection(filesRef);
+
+  const codebaseText = useMemo(() => {
+    if (!files) return "";
+    return files
+      .map((f) => `FILE: ${f.filePath}\nCONTENT:\n${f.fileContent}\n---`)
+      .join('\n');
+  }, [files]);
+
+  const selectedFile = useMemo(() => {
+    return files?.find(f => f.id === selectedFileId) || null;
+  }, [files, selectedFileId]);
+
+  const handleFileSelect = (file: any) => {
+    setSelectedFileId(file.id);
+    setActiveTab('explain');
   };
+
+  if (isUserLoading || isProjectLoading) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <h2 className="text-2xl font-bold">Project not found</h2>
+          <Button onClick={() => window.location.href = '/'}>Go Home</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider defaultOpen>
@@ -45,7 +84,11 @@ export default function DashboardPage({ params }: { params: { id: string } }) {
             </div>
           </SidebarHeader>
           <SidebarContent className="p-2">
-            <FileTree node={MOCK_CODEBASE} onSelect={handleFileSelect} />
+            {!files ? (
+               <Loader2 className="w-4 h-4 animate-spin mx-auto mt-4" />
+            ) : (
+              <FileTree files={files} onSelect={handleFileSelect} />
+            )}
           </SidebarContent>
         </Sidebar>
 
@@ -56,7 +99,7 @@ export default function DashboardPage({ params }: { params: { id: string } }) {
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-muted-foreground">Dashboard</span>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                <span className="text-white font-medium">{params.id === 'demo' ? 'codewhisper-demo' : params.id}</span>
+                <span className="text-white font-medium">{project.name}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">

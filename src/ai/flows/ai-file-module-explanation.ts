@@ -17,7 +17,7 @@ const AiFileModuleExplanationInputSchema = z.object({
 export type AiFileModuleExplanationInput = z.infer<typeof AiFileModuleExplanationInputSchema>;
 
 const AiFileModuleExplanationOutputSchema = z.object({
-  explanation: z.string().describe('A clear and simple explanation of the file\\'s role, functionality, and how it integrates with other parts of the codebase.'),
+  explanation: z.string().describe("A clear and simple explanation of the file's role, functionality, and how it integrates with other parts of the codebase."),
 });
 export type AiFileModuleExplanationOutput = z.infer<typeof AiFileModuleExplanationOutputSchema>;
 

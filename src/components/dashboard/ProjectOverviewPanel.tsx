@@ -1,0 +1,103 @@
+"use client";
+
+import { useEffect, useState } from 'react';
+import { aiProjectOverview, AiProjectOverviewOutput } from '@/ai/flows/ai-project-overview';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Zap, Boxes, Layers, CheckCircle2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+export function ProjectOverviewPanel({ codebaseContent }: { codebaseContent: string }) {
+  const [data, setData] = useState<AiProjectOverviewOutput | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadOverview() {
+      try {
+        const result = await aiProjectOverview({ codebaseContent });
+        setData(result);
+      } catch (error) {
+        console.error("Failed to load overview", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadOverview();
+  }, [codebaseContent]);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="col-span-1 md:col-span-2 bg-card/50 border-white/5">
+          <CardHeader><Skeleton className="h-8 w-1/3 bg-muted" /></CardHeader>
+          <CardContent><Skeleton className="h-24 w-full bg-muted" /></CardContent>
+        </Card>
+        <Card className="bg-card/50 border-white/5">
+          <CardHeader><Skeleton className="h-8 w-1/2 bg-muted" /></CardHeader>
+          <CardContent><div className="flex gap-2"><Skeleton className="h-6 w-16 bg-muted" /><Skeleton className="h-6 w-16 bg-muted" /></div></CardContent>
+        </Card>
+        <Card className="bg-card/50 border-white/5">
+          <CardHeader><Skeleton className="h-8 w-1/2 bg-muted" /></CardHeader>
+          <CardContent><Skeleton className="h-20 w-full bg-muted" /></CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <ScrollArea className="h-full pr-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
+        <Card className="col-span-1 md:col-span-2 bg-card/50 border-white/5 overflow-hidden group">
+          <div className="h-1 bg-primary w-full opacity-50 group-hover:opacity-100 transition-opacity" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl font-headline">
+              <Zap className="w-5 h-5 text-primary" />
+              Project Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground leading-relaxed">
+              {data?.summary}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/50 border-white/5 group">
+          <div className="h-1 bg-accent w-full opacity-50 group-hover:opacity-100 transition-opacity" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl font-headline">
+              <Boxes className="w-5 h-5 text-accent" />
+              Tech Stack
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {data?.techStack.map((tech, i) => (
+                <Badge key={i} variant="secondary" className="bg-accent/10 text-accent border-accent/20 hover:bg-accent/20 transition-colors">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {tech}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/50 border-white/5 group">
+          <div className="h-1 bg-white/10 w-full group-hover:bg-primary transition-colors" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl font-headline">
+              <Layers className="w-5 h-5 text-primary" />
+              Architecture
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground text-sm leading-relaxed whitespace-pre-wrap">
+              {data?.architecture}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </ScrollArea>
+  );
+}

@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview This file implements AI generation for project overviews using the OpenAI SDK.
+ * @fileOverview This file implements AI generation for project overviews using the direct OpenAI SDK.
  */
 
 import { openai, AI_MODEL } from '@/ai/genkit';
@@ -35,6 +35,7 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000)
 
 export async function aiProjectOverview(input: { codebaseContent: string }): Promise<AiProjectOverviewOutput> {
   return callWithRetry(async () => {
+    // Direct SDK call avoids the 'Model undefined' Genkit registry bug
     const response = await openai.chat.completions.create({
       model: AI_MODEL,
       messages: [

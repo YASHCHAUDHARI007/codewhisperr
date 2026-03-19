@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 
 /**
  * Initializes the OpenAI client configured for Groq.
+ * This direct SDK approach bypasses Genkit registry resolution issues.
  */
 export const openai = new OpenAI({
   apiKey: process.env.GROQ_API_KEY,

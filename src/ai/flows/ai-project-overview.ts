@@ -10,10 +10,6 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-/**
- * Represents the input for the AI project overview flow.
- * It expects the concatenated content of the codebase files.
- */
 const AiProjectOverviewInputSchema = z.object({
   codebaseContent: z
     .string()
@@ -23,10 +19,6 @@ const AiProjectOverviewInputSchema = z.object({
 });
 export type AiProjectOverviewInput = z.infer<typeof AiProjectOverviewInputSchema>;
 
-/**
- * Represents the output from the AI project overview flow.
- * It includes a summary, tech stack, and architecture description.
- */
 const AiProjectOverviewOutputSchema = z.object({
   summary: z.string().describe("A high-level summary of the project's purpose."),
   techStack: z
@@ -37,7 +29,7 @@ const AiProjectOverviewOutputSchema = z.object({
 export type AiProjectOverviewOutput = z.infer<typeof AiProjectOverviewOutputSchema>;
 
 /**
- * Helper to call a function with retry logic for rate limits.
+ * Helper to call a function with retry logic for rate limits and transient errors.
  */
 async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000): Promise<T> {
   let lastError;
@@ -47,7 +39,8 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000)
     } catch (error: any) {
       lastError = error;
       const errorMsg = error?.message || "";
-      if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+      // Retry on rate limit (429) or transient server errors
+      if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('500') || errorMsg.includes('503')) {
         await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2; // Exponential backoff
         continue;
@@ -58,12 +51,6 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000)
   throw lastError;
 }
 
-/**
- * Generates a high-level overview of a software project based on its codebase content.
- *
- * @param input - An object containing the `codebaseContent` string.
- * @returns A promise that resolves to an object containing the project `summary`, `techStack`, and `architecture`.
- */
 export async function aiProjectOverview(
   input: AiProjectOverviewInput
 ): Promise<AiProjectOverviewOutput> {
@@ -85,8 +72,8 @@ Codebase Content:
 
 Based on the above codebase content, provide your analysis in a structured JSON format with the following fields:
 1.  "summary": A concise, high-level summary (1-3 sentences) of the project's main purpose and functionality.
-2.  "techStack": An array of strings listing the primary technologies, frameworks, and programming languages identified (e.g., "React", "Node.js", "Express", "MongoDB", "TypeScript", "Python", "FastAPI").
-3.  "architecture": A descriptive explanation of the project's overall architecture, including key components (e.g., frontend, backend, database), how they interact, and any notable design patterns or data flows.
+2.  "techStack": An array of strings listing the primary technologies, frameworks, and programming languages identified.
+3.  "architecture": A descriptive explanation of the project's overall architecture, including key components.
 
 Ensure the output is valid JSON and directly adheres to the schema provided.`,
 });

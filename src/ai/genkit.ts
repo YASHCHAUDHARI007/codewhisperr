@@ -1,6 +1,6 @@
 
 import { genkit } from 'genkit';
-import { openai } from 'genkitx-openai';
+import { openAI } from 'genkitx-openai';
 
 /**
  * Initializes Genkit with Groq as the exclusive AI provider using the OpenAI community plugin.
@@ -10,7 +10,7 @@ import { openai } from 'genkitx-openai';
  */
 export const ai = genkit({
   plugins: [
-    openai({
+    openAI({
       apiKey: process.env.GROQ_API_KEY,
       baseURL: 'https://api.groq.com/openai/v1',
     }),

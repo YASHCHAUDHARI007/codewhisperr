@@ -10,6 +10,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
+export const maxDuration = 60;
+
 const InteractiveAiChatInputSchema = z.object({
   query: z.string().describe("The user's natural language question about the codebase."),
   codebaseContent: z
@@ -53,6 +55,9 @@ const interactiveAiChatFlow = ai.defineFlow(
   },
   async (input) => {
     const { output } = await prompt(input);
-    return output!;
+    if (!output) {
+      throw new Error('AI failed to respond to your query.');
+    }
+    return output;
   }
 );

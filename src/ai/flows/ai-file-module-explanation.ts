@@ -10,6 +10,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
+export const maxDuration = 60;
+
 const AiFileModuleExplanationInputSchema = z.object({
   filePath: z.string().describe('The full path of the file to be explained within the codebase.'),
   fileContent: z.string().describe('The complete content of the file to be explained.'),
@@ -53,6 +55,9 @@ const aiFileModuleExplanationFlow = ai.defineFlow(
   },
   async (input) => {
     const { output } = await aiFileModuleExplanationPrompt(input);
-    return output!;
+    if (!output) {
+      throw new Error('AI failed to generate an explanation.');
+    }
+    return output;
   }
 );

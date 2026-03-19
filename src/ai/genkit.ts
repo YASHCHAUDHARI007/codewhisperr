@@ -13,6 +13,8 @@ export const ai = genkit({
     openAI({
       apiKey: process.env.GROQ_API_KEY,
       baseURL: 'https://api.groq.com/openai/v1',
+      // Explicitly register the Groq model so Genkit's registry can find it
+      models: ['llama-3.3-70b-versatile'],
     }),
   ],
   // Using Groq's high-performance Llama 3.3 model

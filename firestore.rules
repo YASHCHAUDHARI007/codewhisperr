@@ -1,0 +1,110 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * AI Codebase Explainer & Debugger Security Rules
+     *
+     * CORE PHILOSOPHY:
+     * This ruleset enforces a strict path-based ownership model. All data is logically
+     * and physically nested under a user-specific root (/users/{userId}). Authorization
+     * is determined by verifying the user's identity against the URL path.
+     *
+     * DATA STRUCTURE:
+     * - /users/{userId}/projects/{projectId}: Root project metadata.
+     * - .../codeFiles/{fileId}: Analyzed source code and AI insights.
+     * - .../chatSessions/{chatId}: Project-specific AI conversations.
+     * - .../messages/{msgId}: Individual chat messages.
+     *
+     * KEY SECURITY DECISIONS:
+     * - Authorization Independence: Every document is required to contain a 'userId' 
+     *   field that matches the path. This allows rules to remain performant without 
+     *   using expensive get() calls to parent documents.
+     * - Relational Integrity: On creation, the rules enforce that internal fields 
+     *   (userId, projectId, chatSessionId) match the structural path of the document.
+     * - Immutability: Ownership and relationship fields (like userId) are made 
+     *   immutable after creation to prevent data hijacking or accidental orphaning.
+     * - Prototyping Flexibility: While access is strictly controlled, the specific 
+     *   schema of content fields (names, status, content) is not enforced to allow 
+     *   for rapid development and iteration.
+     */
+
+    // --- Helper Functions ---
+
+    /** Checks if the request is from a signed-in user. */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** Checks if the authenticated user matches the provided userId from the path. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** 
+     * Verifies the user owns the resource and the resource actually exists.
+     * Used for update and delete operations to ensure state-change robustness.
+     */
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Controls access to the primary Project metadata documents.
+     * @path /users/{userId}/projects/{projectId}
+     * @allow (create) if auth UID is 'abc' and path userId is 'abc' and data.userId is 'abc'.
+     * @deny (list) if auth UID is 'abc' but path userId is 'xyz'.
+     * @principle Enforces path-based ownership and relational integrity for the root entity.
+     */
+    match /users/{userId}/projects/{projectId} {
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+
+      /**
+       * @description Controls access to individual code files and their AI analysis results.
+       * @path /users/{userId}/projects/{projectId}/codeFiles/{codeFileId}
+       * @allow (get) if authenticated user matches the userId in the path.
+       * @deny (create) if the internal projectId field does not match the parent projectId in the path.
+       * @principle Uses denormalized identifiers to verify relational consistency without cross-document lookups.
+       */
+      match /codeFiles/{codeFileId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.userId == userId && request.resource.data.projectId == projectId;
+        allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId && request.resource.data.projectId == resource.data.projectId;
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
+       * @description Controls access to interactive AI chat sessions tied to a project.
+       * @path /users/{userId}/projects/{projectId}/chatSessions/{chatSessionId}
+       * @allow (update) if the owner updates the title and userId/projectId remain unchanged.
+       * @deny (delete) if the document does not exist or the user is not the owner.
+       * @principle Ensures session data is strictly private and linked correctly to the parent project.
+       */
+      match /chatSessions/{chatSessionId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.userId == userId && request.resource.data.projectId == projectId;
+        allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId && request.resource.data.projectId == resource.data.projectId;
+        allow delete: if isExistingOwner(userId);
+
+        /**
+         * @description Controls access to individual messages within a specific chat session.
+         * @path /users/{userId}/projects/{projectId}/chatSessions/{chatSessionId}/messages/{messageId}
+         * @allow (list) if the user is the owner of the entire path branch.
+         * @deny (create) if the data.chatSessionId doesn't match the path's chatSessionId.
+         * @principle Deeply nested relational integrity enforcement using path variables.
+         */
+        match /messages/{messageId} {
+          allow get, list: if isOwner(userId);
+          allow create: if isOwner(userId) && request.resource.data.userId == userId && request.resource.data.projectId == projectId && request.resource.data.chatSessionId == chatSessionId;
+          allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId && request.resource.data.projectId == resource.data.projectId && request.resource.data.chatSessionId == resource.data.chatSessionId;
+          allow delete: if isExistingOwner(userId);
+        }
+      }
+    }
+  }
+}

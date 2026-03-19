@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { aiProjectOverview, AiProjectOverviewOutput } from '@/ai/flows/ai-project-overview';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,14 +8,29 @@ import { Zap, Boxes, Layers, CheckCircle2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 export function ProjectOverviewPanel({ codebaseContent }: { codebaseContent: string }) {
-  const [data, setData] = useState<AiProjectOverviewOutput | null>(null);
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadOverview() {
+      if (!codebaseContent) return;
+      setLoading(true);
       try {
-        const result = await aiProjectOverview({ codebaseContent });
-        setData(result);
+        const res = await fetch("/api/ai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            systemPrompt: "You are an expert software architect. Analyze the codebase and return a JSON object with: summary (string), techStack (array of strings), and architecture (string).",
+            prompt: `Analyze the provided codebase and return a structured overview.\n\nCodebase:\n${codebaseContent}`,
+            jsonMode: true
+          }),
+        });
+
+        if (!res.ok) throw new Error("API request failed");
+        
+        const responseData = await res.json();
+        const parsed = JSON.parse(responseData.result);
+        setData(parsed);
       } catch (error) {
         console.error("Failed to load overview", error);
       } finally {
@@ -73,7 +87,7 @@ export function ProjectOverviewPanel({ codebaseContent }: { codebaseContent: str
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {data?.techStack.map((tech, i) => (
+              {data?.techStack?.map((tech: string, i: number) => (
                 <Badge key={i} variant="secondary" className="bg-accent/10 text-accent border-accent/20 hover:bg-accent/20 transition-colors">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
                   {tech}

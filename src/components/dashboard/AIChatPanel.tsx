@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import { interactiveAiChat } from '@/ai/flows/interactive-ai-chat';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -38,12 +37,24 @@ export function AIChatPanel({ codebaseContent }: { codebaseContent: string }) {
     setIsLoading(true);
 
     try {
-      const response = await interactiveAiChat({
-        query: userMessage,
-        codebaseContent
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          systemPrompt: "You are an AI assistant helping a developer understand their codebase. Return a JSON object with a single field 'answer'.",
+          prompt: `Context:\n${codebaseContent}\n\nUser Question:\n${userMessage}`,
+          jsonMode: true
+        }),
       });
-      setMessages(prev => [...prev, { role: 'assistant', content: response.answer }]);
+
+      if (!res.ok) throw new Error("API request failed");
+      
+      const data = await res.json();
+      const parsed = JSON.parse(data.result);
+      
+      setMessages(prev => [...prev, { role: 'assistant', content: parsed.answer }]);
     } catch (error) {
+      console.error("Chat error:", error);
       setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I encountered an error processing your request." }]);
     } finally {
       setIsLoading(false);
@@ -100,7 +111,7 @@ export function AIChatPanel({ codebaseContent }: { codebaseContent: string }) {
           </Button>
         </form>
         <p className="text-[10px] text-muted-foreground mt-3 text-center uppercase tracking-widest font-bold">
-          Powered by Groq Llama 3.3
+          Powered by Groq Llama 3.1
         </p>
       </div>
     </Card>

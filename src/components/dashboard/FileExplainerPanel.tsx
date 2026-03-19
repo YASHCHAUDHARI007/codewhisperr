@@ -1,33 +1,41 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { aiFileModuleExplanation, AiFileModuleExplanationOutput } from '@/ai/flows/ai-file-module-explanation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Info, Code, FileText, Sparkles } from 'lucide-react';
-import { FileNode } from '@/app/lib/mock-codebase';
+import { Code, Sparkles } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-export function FileExplainerPanel({ file }: { file: FileNode }) {
-  const [data, setData] = useState<AiFileModuleExplanationOutput | null>(null);
+export function FileExplainerPanel({ file }: { file: any }) {
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function explainFile() {
       setLoading(true);
       try {
-        const result = await aiFileModuleExplanation({
-          filePath: file.path,
-          fileContent: file.content || ""
+        const res = await fetch("/api/ai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            systemPrompt: "You are an AI assistant helping developers understand code. Return a JSON object with a single field 'explanation'.",
+            prompt: `Explain this file's role and functionality in the project.\nPath: ${file.filePath}\nContent:\n${file.fileContent}`,
+            jsonMode: true
+          }),
         });
-        setData(result);
+
+        if (!res.ok) throw new Error("API request failed");
+        
+        const responseData = await res.json();
+        const parsed = JSON.parse(responseData.result);
+        setData(parsed);
       } catch (error) {
         console.error("Failed to explain file", error);
       } finally {
         setLoading(false);
       }
     }
-    if (file.type === 'file') {
+    if (file) {
       explainFile();
     }
   }, [file]);
@@ -38,13 +46,13 @@ export function FileExplainerPanel({ file }: { file: FileNode }) {
         <CardHeader className="shrink-0 border-b border-white/5 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-code flex items-center gap-2 text-primary">
             <Code className="w-4 h-4" />
-            {file.path}
+            {file.filePath}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
           <ScrollArea className="h-full">
             <pre className="p-6 text-xs font-code text-muted-foreground leading-relaxed">
-              <code>{file.content}</code>
+              <code>{file.fileContent}</code>
             </pre>
           </ScrollArea>
         </CardContent>

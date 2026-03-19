@@ -8,7 +8,7 @@
  * - InteractiveAiChatOutput - The return type for the interactiveAiChat function.
  */
 
-import { ai, GROQ_MODEL } from '@/ai/genkit';
+import { ai, AI_MODEL } from '@/ai/genkit';
 import { z } from 'genkit';
 
 const InteractiveAiChatInputSchema = z.object({
@@ -52,10 +52,10 @@ export async function interactiveAiChat(input: InteractiveAiChatInput): Promise<
 
 const prompt = ai.definePrompt({
   name: 'interactiveAiChatPrompt',
-  model: GROQ_MODEL,
+  model: AI_MODEL,
   input: { schema: InteractiveAiChatInputSchema },
   output: { schema: InteractiveAiChatOutputSchema },
-  prompt: `You are an expert software engineer and codebase analyst. Your task is to answer questions about the provided codebase content. If the information is not present in the provided context, state that you cannot find the information within the given context.
+  prompt: `You are an expert software engineer and codebase analyst. Your task is to answer questions about the provided codebase context. If the information is not present in the provided context, state that you cannot find the information within the given context.
 
 Codebase Context:
 \`\`\`

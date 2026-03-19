@@ -8,7 +8,7 @@
  * - AiProjectOverviewOutput - The return type for the aiProjectOverview function.
  */
 
-import { ai, GROQ_MODEL } from '@/ai/genkit';
+import { ai, AI_MODEL } from '@/ai/genkit';
 import { z } from 'genkit';
 
 const AiProjectOverviewInputSchema = z.object({
@@ -60,7 +60,7 @@ export async function aiProjectOverview(
 
 const prompt = ai.definePrompt({
   name: 'aiProjectOverviewPrompt',
-  model: GROQ_MODEL,
+  model: AI_MODEL,
   input: {schema: AiProjectOverviewInputSchema},
   output: {schema: AiProjectOverviewOutputSchema},
   prompt: `You are an expert software architect and analyst. Your task is to analyze the provided codebase content and extract a high-level summary of its purpose, the technologies used, and its overall architectural structure.

@@ -8,7 +8,7 @@
  * - AiFileModuleExplanationOutput - The return type for the aiFileModuleExplanation function.
  */
 
-import { ai, GROQ_MODEL } from '@/ai/genkit';
+import { ai, AI_MODEL } from '@/ai/genkit';
 import { z } from 'genkit';
 
 const AiFileModuleExplanationInputSchema = z.object({
@@ -50,7 +50,7 @@ export async function aiFileModuleExplanation(input: AiFileModuleExplanationInpu
 
 const aiFileModuleExplanationPrompt = ai.definePrompt({
   name: 'aiFileModuleExplanationPrompt',
-  model: GROQ_MODEL,
+  model: AI_MODEL,
   input: { schema: AiFileModuleExplanationInputSchema },
   output: { schema: AiFileModuleExplanationOutputSchema },
   prompt: `You are an expert software architect and senior developer tasked with explaining a specific file from a codebase. Your goal is to provide a clear, simple, and concise explanation of the file's role, its core functionality, and how it integrates with other parts of the project.

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef } from 'react';
@@ -32,6 +33,51 @@ export default function LandingPage() {
     return user.uid;
   };
 
+  const processZipContent = async (zipContent: JSZip, projectId: string, projectName: string, userId: string) => {
+    const filesToProcess = Object.entries(zipContent.files).filter(([_, entry]) => !entry.dir);
+    const totalFiles = filesToProcess.length;
+    let processedCount = 0;
+
+    setProcessingStage(`Uploading ${totalFiles} files...`);
+
+    // Process in batches to avoid overwhelming the browser and Firestore
+    const BATCH_SIZE = 15;
+    for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
+      const batch = filesToProcess.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async ([path, zipEntry]) => {
+        const fileContent = await zipEntry.async('string');
+        const fileId = doc(collection(db, 'temp')).id;
+        
+        // Clean path (strip leading slashes and potential root dir from GitHub zipballs)
+        let cleanPath = path.replace(/^\/+/, '');
+        const pathParts = cleanPath.split('/');
+        // GitHub zipballs usually have a root folder like owner-repo-sha/
+        // If we have more than one part, we might want to check if the first part is that root folder
+        // but for now, we'll just store the path as is provided by the zip structure.
+
+        const fileRef = doc(db, 'users', userId, 'projects', projectId, 'codeFiles', fileId);
+        
+        setDocumentNonBlocking(fileRef, {
+          id: fileId,
+          projectId: projectId,
+          userId: userId,
+          filePath: cleanPath,
+          fileName: pathParts[pathParts.length - 1] || '',
+          fileContent: fileContent,
+          fileExtension: cleanPath.split('.').pop() || ''
+        }, { merge: true });
+        
+        processedCount++;
+        setUploadProgress(Math.round((processedCount / totalFiles) * 100));
+      }));
+    }
+
+    setProcessingStage('Finalizing analysis...');
+    const projectRef = doc(db, 'users', userId, 'projects', projectId);
+    setDocumentNonBlocking(projectRef, { status: 'analyzed' }, { merge: true });
+    router.push(`/dashboard/${projectId}`);
+  };
+
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -62,39 +108,7 @@ export default function LandingPage() {
         uploadFileName: file.name
       }, { merge: true });
 
-      const filesToProcess = Object.entries(content.files).filter(([_, entry]) => !entry.dir);
-      const totalFiles = filesToProcess.length;
-      let processedCount = 0;
-
-      setProcessingStage(`Uploading ${totalFiles} files...`);
-
-      // Process in batches to avoid overwhelming the browser and Firestore
-      const BATCH_SIZE = 10;
-      for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
-        const batch = filesToProcess.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map(async ([path, zipEntry]) => {
-          const fileContent = await zipEntry.async('string');
-          const fileId = doc(collection(db, 'temp')).id;
-          const fileRef = doc(db, 'users', userId, 'projects', projectId, 'codeFiles', fileId);
-          
-          setDocumentNonBlocking(fileRef, {
-            id: fileId,
-            projectId: projectId,
-            userId: userId,
-            filePath: path,
-            fileName: path.split('/').pop() || '',
-            fileContent: fileContent,
-            fileExtension: path.split('.').pop() || ''
-          }, { merge: true });
-          
-          processedCount++;
-          setUploadProgress(Math.round((processedCount / totalFiles) * 100));
-        }));
-      }
-
-      setProcessingStage('Finalizing analysis...');
-      setDocumentNonBlocking(projectRef, { status: 'analyzed' }, { merge: true });
-      router.push(`/dashboard/${projectId}`);
+      await processZipContent(content, projectId, projectName, userId);
     } catch (error) {
       console.error(error);
       toast({ title: "Upload Failed", description: "Could not process the ZIP file.", variant: "destructive" });
@@ -114,19 +128,42 @@ export default function LandingPage() {
     setProcessingStage('Connecting to GitHub...');
 
     try {
-      const parts = githubUrl.replace(/\/$/, '').split('/');
-      const owner = parts[parts.length - 2];
-      const repo = parts[parts.length - 1];
+      // Robust GitHub URL parsing
+      const url = githubUrl.replace(/\/$/, '');
+      const parts = url.split('/');
+      
+      let owner = '';
+      let repo = '';
+
+      if (url.includes('github.com')) {
+        const githubIndex = parts.indexOf('github.com');
+        owner = parts[githubIndex + 1];
+        repo = parts[githubIndex + 2];
+      } else {
+        // Fallback for user/repo format
+        owner = parts[parts.length - 2];
+        repo = parts[parts.length - 1];
+      }
 
       if (!owner || !repo) throw new Error("Invalid GitHub URL. Use format: github.com/user/repo");
 
-      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents`);
-      if (!response.ok) throw new Error("Repository not found or private.");
+      setProcessingStage(`Fetching ${owner}/${repo} archive...`);
       
-      const contents = await response.json();
+      // Fetching the zipball is much more efficient than recursive API calls for large repos
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/zipball`);
+      
+      if (!response.ok) {
+        if (response.status === 404) throw new Error("Repository not found or is private.");
+        throw new Error("Failed to fetch repository from GitHub.");
+      }
+      
+      const blob = await response.blob();
+      const zip = new JSZip();
+      const content = await zip.loadAsync(blob);
+      
       const projectId = doc(collection(db, 'temp')).id;
-
       const projectRef = doc(db, 'users', userId, 'projects', projectId);
+      
       setDocumentNonBlocking(projectRef, {
         id: projectId,
         userId: userId,
@@ -136,35 +173,7 @@ export default function LandingPage() {
         sourceUrl: githubUrl
       }, { merge: true });
 
-      const files = contents.filter((item: any) => item.type === 'file');
-      const totalFiles = files.length;
-      let processedCount = 0;
-
-      setProcessingStage(`Ingesting ${totalFiles} repository files...`);
-
-      for (const item of files) {
-        const fileRes = await fetch(item.download_url);
-        const fileContent = await fileRes.text();
-        const fileId = doc(collection(db, 'temp')).id;
-        const fileRef = doc(db, 'users', userId, 'projects', projectId, 'codeFiles', fileId);
-        
-        setDocumentNonBlocking(fileRef, {
-          id: fileId,
-          projectId: projectId,
-          userId: userId,
-          filePath: item.path,
-          fileName: item.name,
-          fileContent: fileContent,
-          fileExtension: item.name.split('.').pop() || ''
-        }, { merge: true });
-
-        processedCount++;
-        setUploadProgress(Math.round((processedCount / totalFiles) * 100));
-      }
-
-      setProcessingStage('Preparing your dashboard...');
-      setDocumentNonBlocking(projectRef, { status: 'analyzed' }, { merge: true });
-      router.push(`/dashboard/${projectId}`);
+      await processZipContent(content, projectId, repo, userId);
     } catch (error: any) {
       toast({ title: "Ingestion Failed", description: error.message, variant: "destructive" });
       setIsProcessing(false);

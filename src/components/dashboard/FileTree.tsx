@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronRight, ChevronDown, File, FileCode, FileText, Package, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -14,8 +14,19 @@ export function FileTree({ files, onSelect }: FileTreeProps) {
   // Reconstruct tree from flat files
   const tree = useMemo(() => {
     const root: any = { name: 'root', type: 'directory', children: {} };
-    files.forEach(file => {
-      const parts = file.filePath.split('/');
+    
+    // Sort files by path length and alphabetical order to ensure folders are processed correctly
+    const sortedFiles = [...files].sort((a, b) => a.filePath.localeCompare(b.filePath));
+
+    sortedFiles.forEach(file => {
+      // Filter out empty parts and leading slashes
+      const parts = file.filePath.split('/').filter(Boolean);
+      
+      // If the path comes from a GitHub zip, it might have a root folder like owner-repo-sha/
+      // We skip the very first part if there's more than one, to keep the tree clean
+      // Actually, it's safer to keep it or handle it at ingestion. 
+      // For now, let's just make sure we handle the nesting.
+
       let current = root;
       parts.forEach((part, i) => {
         if (i === parts.length - 1) {
@@ -33,14 +44,16 @@ export function FileTree({ files, onSelect }: FileTreeProps) {
 
   return (
     <div className="space-y-1">
-      {Object.values(tree.children).map((node: any, idx) => (
-        <TreeNode key={idx} node={node} onSelect={onSelect} level={0} />
-      ))}
+      {Object.values(tree.children).length > 0 ? (
+        Object.values(tree.children).map((node: any, idx) => (
+          <TreeNode key={idx} node={node} onSelect={onSelect} level={0} />
+        ))
+      ) : (
+        <p className="text-xs text-muted-foreground p-4 text-center">No files found.</p>
+      )}
     </div>
   );
 }
-
-import { useMemo } from 'react';
 
 function TreeNode({ node, onSelect, level }: { node: any, onSelect: (f: any) => void, level: number }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -55,7 +68,7 @@ function TreeNode({ node, onSelect, level }: { node: any, onSelect: (f: any) => 
 
   const getIcon = () => {
     if (node.type === 'directory') {
-      return isOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />;
+      return <Folder className={cn("w-4 h-4", isOpen ? "text-primary/70" : "text-muted-foreground/50")} />;
     }
     const name = node.name.toLowerCase();
     if (name.endsWith('.ts') || name.endsWith('.tsx') || name.endsWith('.js') || name.endsWith('.jsx')) {
@@ -81,16 +94,18 @@ function TreeNode({ node, onSelect, level }: { node: any, onSelect: (f: any) => 
         onClick={toggle}
       >
         <span className="shrink-0">
-          {node.type === 'directory' ? <Folder className="w-4 h-4 text-muted-foreground/50" /> : getIcon()}
+          {getIcon()}
         </span>
         <span className={cn("truncate", node.type === 'directory' ? "text-sidebar-foreground font-medium" : "text-muted-foreground group-hover:text-white")}>
           {node.name}
         </span>
         {node.type === 'directory' && (
-          <span className="ml-auto">{isOpen ? <ChevronDown className="w-3 h-3 text-muted-foreground/30" /> : <ChevronRight className="w-3 h-3 text-muted-foreground/30" />}</span>
+          <span className="ml-auto">
+            {isOpen ? <ChevronDown className="w-3 h-3 text-muted-foreground/30" /> : <ChevronRight className="w-3 h-3 text-muted-foreground/30" />}
+          </span>
         )}
       </div>
-      {node.type === 'directory' && isOpen && (
+      {node.type === 'directory' && isOpen && node.children && (
         <div className="mt-1">
           {Object.values(node.children).map((child: any, idx) => (
             <TreeNode key={idx} node={child} onSelect={onSelect} level={level + 1} />

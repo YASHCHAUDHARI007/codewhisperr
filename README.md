@@ -85,7 +85,7 @@ Contributions are welcome! Feel free to fork and improve the project.
 
 ## 📄 License
 
-Free
+MIT Licence 
 ---
 
 

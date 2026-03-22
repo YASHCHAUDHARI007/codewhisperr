@@ -1,80 +1,12 @@
 'use client';
 import {
   Auth,
-  GoogleAuthProvider,
-  GithubAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile
 } from 'firebase/auth';
 import { toast } from '@/hooks/use-toast';
-
-/** 
- * Initiate Google sign-in.
- * Tries popup first, falls back to redirect if popups are blocked or browser restricted.
- */
-export async function initiateGoogleSignIn(authInstance: Auth): Promise<void> {
-  const provider = new GoogleAuthProvider();
-  try {
-    await signInWithPopup(authInstance, provider);
-  } catch (error: any) {
-    const errorCode = error?.code;
-    const errorMessage = error?.message?.toLowerCase() || "";
-    
-    const isPopupBlocked = 
-      errorCode === 'auth/popup-blocked' || 
-      errorCode === 'auth/cancelled-popup-request' ||
-      errorCode === 'auth/popup-closed-by-user' ||
-      errorMessage.includes('popup') ||
-      errorMessage.includes('blocked');
-
-    if (isPopupBlocked) {
-      toast({
-        title: "Redirecting to Sign-in",
-        description: "Your browser blocked the sign-in popup. Redirecting you to complete sign-in safely.",
-      });
-      return await signInWithRedirect(authInstance, provider);
-    }
-    
-    console.error('Google sign-in error:', error);
-    throw error;
-  }
-}
-
-/** 
- * Initiate GitHub sign-in.
- * Tries popup first, falls back to redirect if popups are blocked.
- */
-export async function initiateGithubSignIn(authInstance: Auth): Promise<void> {
-  const provider = new GithubAuthProvider();
-  try {
-    await signInWithPopup(authInstance, provider);
-  } catch (error: any) {
-    const errorCode = error?.code;
-    const errorMessage = error?.message?.toLowerCase() || "";
-    
-    const isPopupBlocked = 
-      errorCode === 'auth/popup-blocked' || 
-      errorCode === 'auth/cancelled-popup-request' ||
-      errorCode === 'auth/popup-closed-by-user' ||
-      errorMessage.includes('popup') ||
-      errorMessage.includes('blocked');
-
-    if (isPopupBlocked) {
-      toast({
-        title: "Redirecting to Sign-in",
-        description: "Your browser blocked the sign-in popup. Redirecting you to complete sign-in safely.",
-      });
-      return await signInWithRedirect(authInstance, provider);
-    }
-    
-    console.error('GitHub sign-in error:', error);
-    throw error;
-  }
-}
 
 /**
  * Initiate Email/Password sign-in.

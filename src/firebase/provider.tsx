@@ -3,9 +3,8 @@
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
-import { Auth, User, onAuthStateChanged, getRedirectResult } from 'firebase/auth';
-import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
-import { toast } from '@/hooks/use-toast';
+import { Auth, User, onAuthStateChanged } from 'firebase/auth';
+import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 
 interface FirebaseProviderProps {
   children: ReactNode;
@@ -64,28 +63,6 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       setUserAuthState({ user: null, isUserLoading: false, userError: new Error("Auth service not provided.") });
       return;
     }
-
-    // Handle redirect results for environments where popups are blocked
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) {
-          console.log("Successfully signed in via redirect:", result.user.email);
-          toast({
-            title: "Signed In",
-            description: `Welcome back, ${result.user.displayName || result.user.email}`,
-          });
-        }
-      })
-      .catch((error) => {
-        console.error("FirebaseProvider: getRedirectResult error:", error);
-        if (error.code !== 'auth/popup-closed-by-user') {
-          toast({
-            title: "Sign-in Error",
-            description: error.message || "Failed to complete sign-in redirect.",
-            variant: "destructive"
-          });
-        }
-      });
 
     const unsubscribe = onAuthStateChanged(
       auth,

@@ -34,21 +34,18 @@ export default function LandingPage() {
 
   const handleLogin = async (provider: 'google' | 'github') => {
     try {
-      if (provider === 'google') await initiateGoogleSignIn(auth);
-      else await initiateGithubSignIn(auth);
-    } catch (err: any) {
-      if (err.code === 'auth/popup-blocked') {
-        toast({
-          title: "Popup Blocked",
-          description: "Sign-in will continue via redirect. Please wait...",
-        });
+      if (provider === 'google') {
+        await initiateGoogleSignIn(auth);
       } else {
-        toast({
-          title: "Sign-in Failed",
-          description: err.message,
-          variant: "destructive"
-        });
+        await initiateGithubSignIn(auth);
       }
+    } catch (err: any) {
+      // If initiate*SignIn rerores the error, it's not a popup error we already handled
+      toast({
+        title: "Sign-in Issue",
+        description: err.message || "An unexpected error occurred during sign-in.",
+        variant: "destructive"
+      });
     }
   };
 

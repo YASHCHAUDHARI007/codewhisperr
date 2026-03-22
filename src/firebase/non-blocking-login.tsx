@@ -5,7 +5,10 @@ import {
   GithubAuthProvider,
   signInWithPopup,
   signInWithRedirect,
-  signOut
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile
 } from 'firebase/auth';
 import { toast } from '@/hooks/use-toast';
 
@@ -16,10 +19,8 @@ import { toast } from '@/hooks/use-toast';
 export async function initiateGoogleSignIn(authInstance: Auth): Promise<void> {
   const provider = new GoogleAuthProvider();
   try {
-    // Attempt popup sign-in
     await signInWithPopup(authInstance, provider);
   } catch (error: any) {
-    // Detect if the error is related to a blocked or closed popup
     const errorCode = error?.code;
     const errorMessage = error?.message?.toLowerCase() || "";
     
@@ -35,7 +36,6 @@ export async function initiateGoogleSignIn(authInstance: Auth): Promise<void> {
         title: "Redirecting to Sign-in",
         description: "Your browser blocked the sign-in popup. Redirecting you to complete sign-in safely.",
       });
-      // Trigger redirect instead
       return await signInWithRedirect(authInstance, provider);
     }
     
@@ -72,6 +72,41 @@ export async function initiateGithubSignIn(authInstance: Auth): Promise<void> {
     }
     
     console.error('GitHub sign-in error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Initiate Email/Password sign-in.
+ */
+export async function initiateEmailSignIn(authInstance: Auth, email: string, pass: string): Promise<void> {
+  try {
+    await signInWithEmailAndPassword(authInstance, email, pass);
+    toast({ title: "Welcome back!", description: "Successfully signed in." });
+  } catch (error: any) {
+    toast({ 
+      title: "Sign-in Failed", 
+      description: error.message || "Invalid credentials.",
+      variant: "destructive"
+    });
+    throw error;
+  }
+}
+
+/**
+ * Initiate Email/Password sign-up.
+ */
+export async function initiateEmailSignUp(authInstance: Auth, email: string, pass: string, name: string): Promise<void> {
+  try {
+    const userCredential = await createUserWithEmailAndPassword(authInstance, email, pass);
+    await updateProfile(userCredential.user, { displayName: name });
+    toast({ title: "Account Created", description: "Welcome to CodeWhisper!" });
+  } catch (error: any) {
+    toast({ 
+      title: "Sign-up Failed", 
+      description: error.message || "Could not create account.",
+      variant: "destructive"
+    });
     throw error;
   }
 }

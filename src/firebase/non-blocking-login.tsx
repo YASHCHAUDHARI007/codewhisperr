@@ -7,6 +7,7 @@ import {
   signInWithRedirect,
   signOut
 } from 'firebase/auth';
+import { toast } from '@/hooks/use-toast';
 
 /** 
  * Initiate Google sign-in.
@@ -30,7 +31,10 @@ export async function initiateGoogleSignIn(authInstance: Auth): Promise<void> {
       errorMessage.includes('blocked');
 
     if (isPopupBlocked) {
-      console.warn('Sign-in popup was blocked or closed. Falling back to redirect.');
+      toast({
+        title: "Redirecting to Sign-in",
+        description: "Your browser blocked the sign-in popup. Redirecting you to complete sign-in safely.",
+      });
       // Trigger redirect instead
       return await signInWithRedirect(authInstance, provider);
     }
@@ -60,7 +64,10 @@ export async function initiateGithubSignIn(authInstance: Auth): Promise<void> {
       errorMessage.includes('blocked');
 
     if (isPopupBlocked) {
-      console.warn('Sign-in popup was blocked or closed. Falling back to redirect.');
+      toast({
+        title: "Redirecting to Sign-in",
+        description: "Your browser blocked the sign-in popup. Redirecting you to complete sign-in safely.",
+      });
       return await signInWithRedirect(authInstance, provider);
     }
     

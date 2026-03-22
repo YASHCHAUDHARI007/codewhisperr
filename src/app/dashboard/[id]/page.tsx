@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from 'react';
@@ -13,6 +14,7 @@ import { Code2, LayoutDashboard, MessageSquare, Info, ChevronRight, Loader2, Roc
 import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { useParams, useRouter } from 'next/navigation';
+import { UserMenu } from '@/components/auth/UserMenu';
 
 export default function DashboardPage() {
   const { id: projectId } = useParams() as { id: string };
@@ -36,11 +38,10 @@ export default function DashboardPage() {
   const { data: project, isLoading: isProjectLoading } = useDoc(projectRef);
   const { data: files, isLoading: isFilesLoading } = useCollection(filesRef);
 
-  // OPTIMIZATION: Light summary for Overview (Only first 5 files, limited content)
   const overviewContext = useMemo(() => {
     if (!files) return "";
     return files
-      .slice(0, 8) // Sample more for a better overview, but keep it manageable
+      .slice(0, 8)
       .map((f) => `FILE: ${f.filePath}\nCONTENT: ${f.fileContent.slice(0, 1500)}...`)
       .join('\n---\n');
   }, [files]);
@@ -132,10 +133,11 @@ export default function DashboardPage() {
                 <span className="text-white font-medium">{project.name}</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4">
               <Button variant="outline" size="sm" className="border-white/5 bg-white/5 text-xs font-medium" onClick={() => router.push('/')}>
                 Back Home
               </Button>
+              <UserMenu />
             </div>
           </header>
 

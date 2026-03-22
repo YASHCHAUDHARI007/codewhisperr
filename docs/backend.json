@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Project": {
@@ -205,8 +206,8 @@
   },
   "auth": {
     "providers": [
-      "password",
-      "anonymous"
+      "google",
+      "github"
     ]
   },
   "firestore": {
@@ -308,6 +309,6 @@
         }
       }
     ],
-    "reasoning": "The recommended Firestore structure is designed following the core principles of Authorization Independence, Clarity of Intent, DBAC, QAPs, and Invariants, specifically tailored for the 'AI Codebase Explainer & Debugger' application. It prioritizes a path-based ownership model, where all user-specific data is nested under a `/users/{userId}` root. This design ensures robust security rules that are simple to write and debug, and highly performant for common access patterns.\n\n**Authorization Independence via Denormalization:**\nThis is a critical aspect of the design. For `Project` documents, ownership is inherently established by the `userId` field within the document and by its placement under `/users/{userId}/projects/{projectId}`. For subcollections like `CodeFile`, `ChatSession`, and `ChatMessage`, authorization independence is achieved by denormalizing the `userId` (and `projectId` for `ChatSession` and `ChatMessage`, and `chatSessionId` for `ChatMessage`) into each document. For example, a `CodeFile` document at `/users/{userId}/projects/{projectId}/codeFiles/{codeFileId}` will explicitly contain `userId` and `projectId` fields. This allows Firestore Security Rules to authorize access to any `CodeFile` document by simply checking `request.auth.uid == resource.data.userId` and validating the path segments (e.g., `userId == request.auth.uid && projectId == resource.data.projectId`). This eliminates the need for expensive and potentially insecure `get()` calls to parent documents in rules, making operations atomic and easier to reason about. It also ensures that a document's authorization context is self-contained.\n\n**Support for Querying and Access Patterns (QAPs):**\n1.  **Listing Projects:** Users can easily list all their projects by querying `/users/{request.auth.uid}/projects`. The security rules will automatically restrict this query to only retrieve projects owned by the authenticated user, as mandated by the `userId` path segment matching `request.auth.uid` and the denormalized `resource.data.userId` field. This structure directly enables secure `list` operations without relying on rules as filters.\n2.  **Accessing Specific Project/Files/Chats:** To access a specific project, its files, or chat sessions, the full path `/users/{request.auth.uid}/projects/{projectId}/...` will be used. The denormalized `userId` and `projectId` (and `chatSessionId` for messages) within the documents, combined with the path segments, allow for efficient and secure point reads and writes. The rules can verify that the `uid` in the path matches `request.auth.uid` and that the `projectId` in the path matches the `projectId` in the document data, ensuring data integrity and ownership.\n\n**Structural Segregation and Predictability:**\nEach collection (projects, codeFiles, chatSessions, messages) maintains a homogeneous security posture: all documents within these collections are private to the owning user. This simplifies rule writing significantly. Descriptive wildcards like `{userId}`, `{projectId}`, `{codeFileId}`, `{chatSessionId}`, and `{messageId}` are used for clarity. The use of a `status` field for `Project` (e.g., 'pending', 'analyzed') provides explicit state modeling, enhancing debuggability and predictability of the application's logic. This consistent and hierarchical structure ensures the application can scale securely and efficiently while maintaining a clear and debuggable authorization model."
+    "reasoning": "The recommended Firestore structure is designed following the core principles of Authorization Independence, Clarity of Intent, DBAC, QAPs, and Invariants, specifically tailored for the 'AI Codebase Explainer & Debugger' application. It prioritizes a path-based ownership model, where all user-specific data is nested under a `/users/{userId}` root. This design ensures robust security rules that are simple to write and debug, and highly performant for common access patterns."
   }
 }

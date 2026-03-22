@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef } from 'react';
@@ -10,10 +11,11 @@ import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { useFirestore, useAuth, useUser, setDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useUser, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 import { fetchGithubRepo } from '@/app/actions/github';
+import { AuthDialog } from '@/components/auth/AuthDialog';
+import { UserMenu } from '@/components/auth/UserMenu';
 import JSZip from 'jszip';
 
 export default function LandingPage() {
@@ -23,21 +25,20 @@ export default function LandingPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState('');
+  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const singleFileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const db = useFirestore();
-  const auth = useAuth();
   const { user } = useUser();
 
   const ensureAuth = async () => {
-    if (!user && !auth.currentUser) {
-      initiateAnonymousSignIn(auth);
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      if (!auth.currentUser) return null;
+    if (!user) {
+      setIsAuthDialogOpen(true);
+      return null;
     }
-    return auth.currentUser?.uid || user?.uid || null;
+    return user.uid;
   };
 
   const createProjectWithFiles = async (userId: string, projectName: string, files: { path: string, content: string }[]) => {
@@ -278,7 +279,11 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 py-20">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 py-20 relative">
+      <div className="absolute top-6 right-6 z-50">
+        {user ? <UserMenu /> : <Button variant="outline" onClick={() => setIsAuthDialogOpen(true)}>Sign In</Button>}
+      </div>
+
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/10 rounded-full blur-[120px]" />
@@ -299,7 +304,6 @@ export default function LandingPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* ZIP Upload Card */}
           <Card className="p-8 bg-card/50 border-white/5 hover:border-primary/50 transition-all flex flex-col items-center text-center space-y-6">
             <div className="p-4 rounded-2xl bg-primary/10">
               <Upload className="w-8 h-8 text-primary" />
@@ -314,7 +318,6 @@ export default function LandingPage() {
             </Button>
           </Card>
 
-          {/* GitHub Card */}
           <Card className="p-8 bg-card/50 border-white/5 hover:border-accent/50 transition-all flex flex-col items-center text-center space-y-6">
             <div className="p-4 rounded-2xl bg-accent/10">
               <Github className="w-8 h-8 text-accent" />
@@ -331,7 +334,6 @@ export default function LandingPage() {
             </form>
           </Card>
 
-          {/* Direct Input Card */}
           <Card className="p-8 bg-card/50 border-white/5 hover:border-white/20 transition-all flex flex-col items-center text-center space-y-6 overflow-hidden">
             <div className="p-4 rounded-2xl bg-muted/50">
               <FileCode className="w-8 h-8 text-muted-foreground" />
@@ -393,6 +395,8 @@ export default function LandingPage() {
           </div>
         </div>
       </div>
+
+      <AuthDialog isOpen={isAuthDialogOpen} onOpenChange={setIsAuthDialogOpen} />
     </div>
   );
 }

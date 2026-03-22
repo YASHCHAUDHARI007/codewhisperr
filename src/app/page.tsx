@@ -40,7 +40,12 @@ export default function LandingPage() {
       if (err.code === 'auth/popup-blocked') {
         toast({
           title: "Popup Blocked",
-          description: "Please allow popups for this site to sign in.",
+          description: "Sign-in will continue via redirect. Please wait...",
+        });
+      } else {
+        toast({
+          title: "Sign-in Failed",
+          description: err.message,
           variant: "destructive"
         });
       }

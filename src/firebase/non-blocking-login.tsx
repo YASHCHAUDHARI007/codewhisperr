@@ -15,19 +15,26 @@ import {
 export async function initiateGoogleSignIn(authInstance: Auth): Promise<void> {
   const provider = new GoogleAuthProvider();
   try {
+    // Attempt popup sign-in
     await signInWithPopup(authInstance, provider);
   } catch (error: any) {
-    // Broaden error detection for popup issues
-    const isPopupError = 
-      error.code === 'auth/popup-blocked' || 
-      error.code === 'auth/cancelled-popup-request' ||
-      error.code === 'auth/popup-closed-by-user' ||
-      error.message?.toLowerCase().includes('popup');
+    // Detect if the error is related to a blocked or closed popup
+    const errorCode = error?.code;
+    const errorMessage = error?.message?.toLowerCase() || "";
+    
+    const isPopupBlocked = 
+      errorCode === 'auth/popup-blocked' || 
+      errorCode === 'auth/cancelled-popup-request' ||
+      errorCode === 'auth/popup-closed-by-user' ||
+      errorMessage.includes('popup') ||
+      errorMessage.includes('blocked');
 
-    if (isPopupError) {
+    if (isPopupBlocked) {
       console.warn('Sign-in popup was blocked or closed. Falling back to redirect.');
+      // Trigger redirect instead
       return await signInWithRedirect(authInstance, provider);
     }
+    
     console.error('Google sign-in error:', error);
     throw error;
   }
@@ -42,16 +49,21 @@ export async function initiateGithubSignIn(authInstance: Auth): Promise<void> {
   try {
     await signInWithPopup(authInstance, provider);
   } catch (error: any) {
-    const isPopupError = 
-      error.code === 'auth/popup-blocked' || 
-      error.code === 'auth/cancelled-popup-request' ||
-      error.code === 'auth/popup-closed-by-user' ||
-      error.message?.toLowerCase().includes('popup');
+    const errorCode = error?.code;
+    const errorMessage = error?.message?.toLowerCase() || "";
+    
+    const isPopupBlocked = 
+      errorCode === 'auth/popup-blocked' || 
+      errorCode === 'auth/cancelled-popup-request' ||
+      errorCode === 'auth/popup-closed-by-user' ||
+      errorMessage.includes('popup') ||
+      errorMessage.includes('blocked');
 
-    if (isPopupError) {
+    if (isPopupBlocked) {
       console.warn('Sign-in popup was blocked or closed. Falling back to redirect.');
       return await signInWithRedirect(authInstance, provider);
     }
+    
     console.error('GitHub sign-in error:', error);
     throw error;
   }
@@ -59,5 +71,5 @@ export async function initiateGithubSignIn(authInstance: Auth): Promise<void> {
 
 /** Initiate sign-out (non-blocking). */
 export function initiateSignOut(authInstance: Auth): void {
-  signOut(authInstance);
+  signOut(authInstance).catch(err => console.error("Sign out error:", err));
 }

@@ -65,9 +65,16 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     }
 
     // Handle redirect results for environments where popups are blocked
-    getRedirectResult(auth).catch((error) => {
-      console.error("FirebaseProvider: getRedirectResult error:", error);
-    });
+    // This is crucial for completing the sign-in flow after a redirect
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          console.log("Successfully signed in via redirect:", result.user.email);
+        }
+      })
+      .catch((error) => {
+        console.error("FirebaseProvider: getRedirectResult error:", error);
+      });
 
     const unsubscribe = onAuthStateChanged(
       auth,

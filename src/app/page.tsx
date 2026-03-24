@@ -166,14 +166,14 @@ export default function LandingPage() {
       <main className="flex-1 flex flex-col items-center">
         <section className="py-24 px-6 w-full max-w-5xl text-center space-y-8">
           <div className="space-y-4">
-            <h1 className="text-5xl md:text-6xl font-headline font-bold text-slate-900 dark:text-white leading-tight">
+            <h1 className="text-5xl md:text-6xl font-headline font-bold text-slate-900 dark:text-white leading-tight animate-in fade-in slide-in-from-top-10 duration-1000 ease-out">
               Next-Gen Analysis
             </h1>
-            <p className="text-xl text-slate-500 dark:text-slate-400 max-w-3xl mx-auto">
-              Analyze Deeper, Debug Smarter.
+            <p className="text-xl text-slate-500 dark:text-slate-400 max-w-3xl mx-auto animate-in fade-in slide-in-from-top-8 duration-1000 delay-200 ease-out fill-mode-both">
+              Analyze Deeper, Debug Smarter
             </p>
           </div>
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500 fill-mode-both">
             <Button size="lg" className="px-8 gap-2" onClick={() => user ? window.scrollTo({ top: 400, behavior: 'smooth' }) : setIsAuthOpen(true)}>
               Start Analysis <ArrowRight className="w-4 h-4" />
             </Button>
@@ -181,7 +181,7 @@ export default function LandingPage() {
         </section>
 
         {!user ? (
-          <section className="py-12 w-full max-w-md px-6">
+          <section className="py-12 w-full max-w-md px-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-700 fill-mode-both">
             <Card className="p-8 text-center space-y-6">
               <ShieldCheck className="w-12 h-12 text-primary mx-auto" />
               <div className="space-y-2">
@@ -192,7 +192,7 @@ export default function LandingPage() {
             </Card>
           </section>
         ) : (
-          <section className="py-20 w-full max-w-6xl px-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <section className="py-20 w-full max-w-6xl px-6 grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-700 fill-mode-both">
             <Card className="hover:border-primary transition-colors cursor-pointer group">
               <CardHeader>
                 <Github className="w-10 h-10 text-slate-400 group-hover:text-primary transition-colors mb-2" />

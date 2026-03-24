@@ -9,14 +9,14 @@ import { ProjectOverviewPanel } from '@/components/dashboard/ProjectOverviewPane
 import { FileExplainerPanel } from '@/components/dashboard/FileExplainerPanel';
 import { AIChatPanel } from '@/components/dashboard/AIChatPanel';
 import { Code2, LayoutDashboard, MessageSquare, Info, ChevronRight, Loader2, Home, Search, FileCode, Bug, RefreshCw, Sparkles, Activity, ShieldCheck, Zap } from 'lucide-react';
-import { useFirestore, useUser, useCollection, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useDoc, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { useParams, useRouter } from 'next/navigation';
-import { UserMenu } from '@/components/auth/UserMenu';
+
+const GUEST_USER_ID = 'anonymous_explorer';
 
 export default function DashboardPage() {
   const { id: projectId } = useParams() as { id: string };
-  const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const router = useRouter();
 
@@ -24,19 +24,15 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [loadingStep, setLoadingStep] = useState(0);
 
-  useEffect(() => {
-    if (!isUserLoading && !user) router.push('/');
-  }, [user, isUserLoading, router]);
-
   const projectRef = useMemoFirebase(() => {
-    if (!db || !user || !projectId) return null;
-    return doc(db, 'users', user.uid, 'projects', projectId);
-  }, [db, user, projectId]);
+    if (!db || !projectId) return null;
+    return doc(db, 'users', GUEST_USER_ID, 'projects', projectId);
+  }, [db, projectId]);
 
   const filesRef = useMemoFirebase(() => {
-    if (!db || !user || !projectId) return null;
-    return collection(db, 'users', user.uid, 'projects', projectId, 'codeFiles');
-  }, [db, user, projectId]);
+    if (!db || !projectId) return null;
+    return collection(db, 'users', GUEST_USER_ID, 'projects', projectId, 'codeFiles');
+  }, [db, projectId]);
 
   const { data: project, isLoading: isProjectLoading } = useDoc(projectRef);
   const { data: files, isLoading: isFilesLoading } = useCollection(filesRef);
@@ -70,7 +66,7 @@ export default function DashboardPage() {
     setActiveTab('explain');
   };
 
-  if (isUserLoading || isProjectLoading) {
+  if (isProjectLoading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950">
         <div className="relative">
@@ -81,7 +77,16 @@ export default function DashboardPage() {
     );
   }
   
-  if (!user || !project) return null;
+  if (!project) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <Code2 className="w-12 h-12 text-slate-300" />
+        <h2 className="text-xl font-bold">Project Not Found</h2>
+        <p className="text-muted-foreground text-sm">This repository or analysis session could not be located.</p>
+        <Button variant="outline" onClick={() => router.push('/')} className="rounded-full">Return Home</Button>
+      </div>
+    );
+  }
 
   if (project.status === 'processing') {
     return (
@@ -176,7 +181,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4">
               <Button size="sm" variant="outline" className="h-8 gap-2 rounded-full px-4"><RefreshCw className="w-3.5 h-3.5" /> Re-scan</Button>
               <div className="w-px h-4 bg-border" />
-              <UserMenu />
+              <Button size="sm" className="h-8 rounded-full px-4" onClick={() => router.push('/')}>New Project</Button>
             </div>
           </header>
 

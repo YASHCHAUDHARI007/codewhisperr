@@ -10,11 +10,11 @@ import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { useFirestore, useUser, setDocumentNonBlocking } from '@/firebase';
+import { useFirestore, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import { UserMenu } from '@/components/auth/UserMenu';
-import { AuthDialog } from '@/components/auth/AuthDialog';
 import JSZip from 'jszip';
+
+const GUEST_USER_ID = 'anonymous_explorer';
 
 export default function LandingPage() {
   const [githubUrl, setGithubUrl] = useState('');
@@ -23,12 +23,10 @@ export default function LandingPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState('');
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const db = useFirestore();
-  const { user, isUserLoading } = useUser();
 
   const createProjectWithFiles = async (userId: string, projectName: string, files: { path: string, content: string }[]) => {
     const projectId = doc(collection(db, 'temp')).id;
@@ -68,11 +66,11 @@ export default function LandingPage() {
 
   const handleSnippetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pastedCode.trim() || !user) return;
+    if (!pastedCode.trim()) return;
     setIsProcessing(true);
     setProcessingStage('Ingesting Snippet');
     try {
-      await createProjectWithFiles(user.uid, snippetName || 'Code Snippet', [{ path: 'snippet.txt', content: pastedCode }]);
+      await createProjectWithFiles(GUEST_USER_ID, snippetName || 'Code Snippet', [{ path: 'snippet.txt', content: pastedCode }]);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
       setIsProcessing(false);
@@ -81,7 +79,7 @@ export default function LandingPage() {
 
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file) return;
     setIsProcessing(true);
     setUploadProgress(0);
     setProcessingStage('Decompressing Archive');
@@ -90,11 +88,11 @@ export default function LandingPage() {
       const zipContent = await zip.loadAsync(file);
       const projectId = doc(collection(db, 'temp')).id;
       const projectName = file.name.replace('.zip', '');
-      const projectRef = doc(db, 'users', user.uid, 'projects', projectId);
+      const projectRef = doc(db, 'users', GUEST_USER_ID, 'projects', projectId);
 
       setDocumentNonBlocking(projectRef, {
         id: projectId,
-        userId: user.uid,
+        userId: GUEST_USER_ID,
         name: projectName,
         status: 'processing',
         uploadDate: new Date().toISOString()
@@ -112,11 +110,11 @@ export default function LandingPage() {
       for (const [path, zipEntry] of filesToProcess) {
         const content = await zipEntry.async('string');
         const fileId = doc(collection(db, 'temp')).id;
-        const fileRef = doc(db, 'users', user.uid, 'projects', projectId, 'codeFiles', fileId);
+        const fileRef = doc(db, 'users', GUEST_USER_ID, 'projects', projectId, 'codeFiles', fileId);
         setDocumentNonBlocking(fileRef, {
           id: fileId,
           projectId: projectId,
-          userId: user.uid,
+          userId: GUEST_USER_ID,
           filePath: path,
           fileName: path.split('/').pop() || '',
           fileContent: content,
@@ -135,8 +133,6 @@ export default function LandingPage() {
       setIsProcessing(false);
     }
   };
-
-  if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950"><Loader2 className="w-8 h-8 animate-spin text-primary opacity-50" /></div>;
 
   if (isProcessing) {
     return (
@@ -174,15 +170,14 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
-      <AuthDialog isOpen={isAuthOpen} onOpenChange={setIsAuthOpen} />
-      
       <header className="h-16 border-b bg-white/80 dark:bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 flex items-center justify-between px-6">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
           <Code2 className="w-6 h-6 text-primary" />
           <span className="font-headline font-bold text-xl tracking-tight">Neuralyze</span>
         </div>
         <div className="flex items-center gap-4">
-          {user ? <UserMenu /> : <Button size="sm" onClick={() => setIsAuthOpen(true)} className="rounded-full px-6">Sign In</Button>}
+          <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground" onClick={() => window.scrollTo({ top: 600, behavior: 'smooth' })}>Analysis Tools</Button>
+          <Button size="sm" className="rounded-full px-6 shadow-lg shadow-primary/20">Get Started</Button>
         </div>
       </header>
 
@@ -197,92 +192,77 @@ export default function LandingPage() {
             </p>
           </div>
           <div className="flex items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500 fill-mode-both">
-            <Button size="lg" className="px-10 rounded-full h-14 text-lg font-semibold gap-3 shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all" onClick={() => user ? window.scrollTo({ top: 600, behavior: 'smooth' }) : setIsAuthOpen(true)}>
+            <Button size="lg" className="px-10 rounded-full h-14 text-lg font-semibold gap-3 shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all" onClick={() => window.scrollTo({ top: 600, behavior: 'smooth' })}>
               Launch Workspace <ArrowRight className="w-5 h-5" />
             </Button>
           </div>
         </section>
 
-        {!user ? (
-          <section className="py-12 w-full max-w-md px-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-700 fill-mode-both">
-            <Card className="p-10 text-center space-y-8 border-slate-200 dark:border-slate-800 shadow-2xl rounded-3xl bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
-              <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto">
-                <ShieldCheck className="w-10 h-10 text-primary" />
+        <section id="analysis-tools" className="py-20 w-full max-w-6xl px-6 grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-700 fill-mode-both">
+          <Card className="hover:border-primary transition-all cursor-pointer group rounded-3xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="p-8">
+              <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
+                <Github className="w-7 h-7 text-slate-400 group-hover:text-primary transition-colors" />
               </div>
-              <div className="space-y-3">
-                <h3 className="text-2xl font-headline font-bold">Secure Access</h3>
-                <p className="text-slate-500 dark:text-slate-400 leading-relaxed">Sign in to securely store your projects and access history in your private cloud workspace.</p>
+              <CardTitle className="text-xl font-headline font-bold mb-2">GitHub Repo URL</CardTitle>
+              <CardDescription className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Directly analyze any public repository by providing its URL.</CardDescription>
+            </CardHeader>
+            <CardContent className="px-8 pb-8">
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="https://github.com/..." 
+                  value={githubUrl} 
+                  onChange={(e) => setGithubUrl(e.target.value)} 
+                  className="h-10 rounded-full bg-white dark:bg-slate-950"
+                />
+                <Button size="sm" className="rounded-full px-5 h-10">Import</Button>
               </div>
-              <Button className="w-full h-12 rounded-full text-base font-bold" onClick={() => setIsAuthOpen(true)}>Get Started Now</Button>
-            </Card>
-          </section>
-        ) : (
-          <section className="py-20 w-full max-w-6xl px-6 grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-700 fill-mode-both">
-            <Card className="hover:border-primary transition-all cursor-pointer group rounded-3xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden">
-              <CardHeader className="p-8">
-                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
-                  <Github className="w-7 h-7 text-slate-400 group-hover:text-primary transition-colors" />
-                </div>
-                <CardTitle className="text-xl font-headline font-bold mb-2">GitHub Repo URL</CardTitle>
-                <CardDescription className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Directly analyze any public repository by providing its URL.</CardDescription>
-              </CardHeader>
-              <CardContent className="px-8 pb-8">
-                <div className="flex gap-2">
+            </CardContent>
+          </Card>
+
+          <Card className="hover:border-primary transition-all cursor-pointer group rounded-3xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden" onClick={() => fileInputRef.current?.click()}>
+            <CardHeader className="p-8">
+              <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
+                <Upload className="w-7 h-7 text-slate-400 group-hover:text-primary transition-colors" />
+              </div>
+              <CardTitle className="text-xl font-headline font-bold mb-2">Upload ZIP File</CardTitle>
+              <CardDescription className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Analyze local projects by uploading a compressed archive.</CardDescription>
+            </CardHeader>
+            <CardContent className="px-8 pb-8">
+              <input type="file" accept=".zip" className="hidden" ref={fileInputRef} onChange={handleZipUpload} />
+              <Button variant="outline" className="w-full h-10 rounded-full border-slate-300 dark:border-slate-700 group-hover:bg-primary/5">Select Archive</Button>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:border-primary transition-all cursor-pointer group rounded-3xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="p-8">
+              <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
+                <FileCode className="w-7 h-7 text-slate-400 group-hover:text-primary transition-colors" />
+              </div>
+              <CardTitle className="text-xl font-headline font-bold mb-2">Paste Code</CardTitle>
+              <CardDescription className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Instant line-by-line explanation for snippets or individual files.</CardDescription>
+            </CardHeader>
+            <CardContent className="px-8 pb-8">
+              <Tabs defaultValue="form">
+                <TabsContent value="form" className="m-0 space-y-3">
                   <Input 
-                    placeholder="https://github.com/..." 
-                    value={githubUrl} 
-                    onChange={(e) => setGithubUrl(e.target.value)} 
+                    placeholder="Project Name" 
+                    value={snippetName} 
+                    onChange={(e) => setSnippetName(e.target.value)} 
                     className="h-10 rounded-full bg-white dark:bg-slate-950"
                   />
-                  <Button size="sm" className="rounded-full px-5 h-10">Import</Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:border-primary transition-all cursor-pointer group rounded-3xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden" onClick={() => fileInputRef.current?.click()}>
-              <CardHeader className="p-8">
-                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
-                  <Upload className="w-7 h-7 text-slate-400 group-hover:text-primary transition-colors" />
-                </div>
-                <CardTitle className="text-xl font-headline font-bold mb-2">Upload ZIP File</CardTitle>
-                <CardDescription className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Analyze local projects by uploading a compressed archive.</CardDescription>
-              </CardHeader>
-              <CardContent className="px-8 pb-8">
-                <input type="file" accept=".zip" className="hidden" ref={fileInputRef} onChange={handleZipUpload} />
-                <Button variant="outline" className="w-full h-10 rounded-full border-slate-300 dark:border-slate-700 group-hover:bg-primary/5">Select Archive</Button>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:border-primary transition-all cursor-pointer group rounded-3xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden">
-              <CardHeader className="p-8">
-                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
-                  <FileCode className="w-7 h-7 text-slate-400 group-hover:text-primary transition-colors" />
-                </div>
-                <CardTitle className="text-xl font-headline font-bold mb-2">Paste Code</CardTitle>
-                <CardDescription className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Instant line-by-line explanation for snippets or individual files.</CardDescription>
-              </CardHeader>
-              <CardContent className="px-8 pb-8">
-                <Tabs defaultValue="form">
-                  <TabsContent value="form" className="m-0 space-y-3">
-                    <Input 
-                      placeholder="Project Name" 
-                      value={snippetName} 
-                      onChange={(e) => setSnippetName(e.target.value)} 
-                      className="h-10 rounded-full bg-white dark:bg-slate-950"
-                    />
-                    <Textarea 
-                      placeholder="Paste code here..." 
-                      className="min-h-[120px] text-xs font-mono rounded-2xl bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800" 
-                      value={pastedCode} 
-                      onChange={(e) => setPastedCode(e.target.value)} 
-                    />
-                    <Button className="w-full h-10 rounded-full" disabled={!pastedCode} onClick={handleSnippetSubmit}>Run Analysis</Button>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </section>
-        )}
+                  <Textarea 
+                    placeholder="Paste code here..." 
+                    className="min-h-[120px] text-xs font-mono rounded-2xl bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800" 
+                    value={pastedCode} 
+                    onChange={(e) => setPastedCode(e.target.value)} 
+                  />
+                  <Button className="w-full h-10 rounded-full" disabled={!pastedCode} onClick={handleSnippetSubmit}>Run Analysis</Button>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </section>
       </main>
 
       <footer className="py-16 border-t bg-white dark:bg-slate-950/50">

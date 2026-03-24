@@ -4,11 +4,10 @@ import { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Zap, Boxes, Layers, AlertCircle, Bug, Sparkles, Activity, ShieldAlert, Cpu } from 'lucide-react';
+import { Zap, Boxes, Layers, AlertCircle, Bug, Sparkles, Activity, ShieldAlert, Cpu, ListCheck } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { aiProjectOverview, type AiProjectOverviewOutput } from '@/ai/flows/ai-project-overview';
 import { FlowchartPanel } from './FlowchartPanel';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 export function ProjectOverviewPanel({ codebaseContent }: { codebaseContent: string }) {
@@ -83,14 +82,18 @@ export function ProjectOverviewPanel({ codebaseContent }: { codebaseContent: str
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <p className="text-lg text-muted-foreground/90 leading-relaxed font-body italic">
-                    {data?.summary}
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold text-primary uppercase tracking-widest">Purpose</p>
+                    <p className="text-lg text-muted-foreground/90 leading-relaxed font-body italic">
+                      {data?.summary}
+                    </p>
+                  </div>
+                  
                   <div className="space-y-4 pt-4 border-t border-white/5">
-                    <h4 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                    <p className="text-sm font-bold text-primary uppercase tracking-widest flex items-center gap-2">
                        <Layers className="w-4 h-4" />
-                       Step-by-Step Logic Flow
-                    </h4>
+                       Functionality & Logic Flow
+                    </p>
                     <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
                       {data?.architecture}
                     </p>
@@ -108,12 +111,16 @@ export function ProjectOverviewPanel({ codebaseContent }: { codebaseContent: str
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {data?.techStack?.map((tech, i) => (
-                        <Badge key={i} className="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 rounded-lg px-3 py-1 text-[10px] font-bold uppercase tracking-wider">
-                          {tech}
-                        </Badge>
-                      ))}
+                    <div className="space-y-4">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Core Technologies</p>
+                      <ul className="grid grid-cols-1 gap-2">
+                        {data?.techStack?.map((tech, i) => (
+                          <li key={i} className="flex items-center gap-2 p-2 rounded-lg bg-white/5 border border-white/5 text-xs text-white/80 font-medium">
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                            {tech}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </CardContent>
                 </Card>

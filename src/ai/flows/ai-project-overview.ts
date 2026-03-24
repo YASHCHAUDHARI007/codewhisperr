@@ -1,28 +1,31 @@
 
 'use server';
 /**
- * @fileOverview This file implements AI generation for project overviews using the direct OpenAI SDK.
+ * @fileOverview Parallel AI analysis for project overviews.
+ * Returns summary, tech stack, architecture, and a Mermaid flowchart.
  */
 
-import { openai, AI_MODEL } from '@/ai/genkit';
+import { ai, AI_MODEL } from '@/ai/genkit';
 import { z } from 'zod';
 
 const AiProjectOverviewOutputSchema = z.object({
-  summary: z.string().describe("A high-level summary of the project's purpose."),
-  techStack: z.array(z.string()).describe('An array of technologies used.'),
-  architecture: z.string().describe("An explanation of the project's overall architecture."),
+  summary: z.string().describe("High-level summary of purpose."),
+  techStack: z.array(z.string()).describe('Core technologies detected.'),
+  architecture: z.string().describe("Step-by-step architectural breakdown."),
+  bugs: z.array(z.string()).describe("Potential inefficiencies or bugs detected."),
+  mermaidFlowchart: z.string().describe("Mermaid syntax for a flowchart of the project logic."),
 });
+
 export type AiProjectOverviewOutput = z.infer<typeof AiProjectOverviewOutputSchema>;
 
-async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000): Promise<T> {
+async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
   let lastError;
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
     } catch (error: any) {
       lastError = error;
-      const errorMsg = error?.message || "";
-      if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('500')) {
+      if (error?.message?.includes('429') || error?.message?.includes('500')) {
         await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2;
         continue;
@@ -34,26 +37,35 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 3000)
 }
 
 export async function aiProjectOverview(input: { codebaseContent: string }): Promise<AiProjectOverviewOutput> {
-  return callWithRetry(async () => {
-    // Direct SDK call avoids the 'Model undefined' Genkit registry bug
-    const response = await openai.chat.completions.create({
-      model: AI_MODEL,
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert software architect. Analyze the codebase and return a JSON object with: summary (string), techStack (array of strings), and architecture (string)."
-        },
-        {
-          role: "user",
-          content: `Analyze the provided codebase and return a structured overview.\n\nCodebase:\n${input.codebaseContent}`
-        }
-      ],
-      response_format: { type: "json_object" }
-    });
-
-    const content = response.choices[0].message.content;
-    if (!content) throw new Error("AI failed to generate project overview.");
-    
-    return JSON.parse(content) as AiProjectOverviewOutput;
-  });
+  return aiProjectOverviewFlow(input);
 }
+
+const prompt = ai.definePrompt({
+  name: 'aiProjectOverviewPrompt',
+  input: { schema: z.object({ codebaseContent: z.string() }) },
+  output: { schema: AiProjectOverviewOutputSchema },
+  config: { model: AI_MODEL },
+  prompt: `You are a senior software architect. Analyze the provided codebase and return a detailed, structured analysis.
+
+Focus on:
+1. What the code does (Summary)
+2. The primary frameworks and libraries (Tech Stack)
+3. Step-by-step logic flow (Architecture)
+4. Potential issues or performance bottlenecks (Bugs)
+5. A visual representation of the main flow in Mermaid syntax (Mermaid Flowchart)
+
+Codebase Context:
+{{{codebaseContent}}}`,
+});
+
+const aiProjectOverviewFlow = ai.defineFlow(
+  {
+    name: 'aiProjectOverviewFlow',
+    inputSchema: z.object({ codebaseContent: z.string() }),
+    outputSchema: AiProjectOverviewOutputSchema,
+  },
+  async (input) => {
+    const { output } = await callWithRetry(() => prompt(input));
+    return output!;
+  }
+);

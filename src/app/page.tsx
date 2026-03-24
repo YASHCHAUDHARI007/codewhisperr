@@ -2,17 +2,16 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, Github, Zap, Shield, Search, Code2, Loader2, CheckCircle2, FileCode, FileText, Lock, Mail, ArrowRight } from 'lucide-react';
+import { Upload, Github, Code2, Loader2, FileCode, Search, Terminal, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
-import { useFirestore, useUser, setDocumentNonBlocking, useAuth } from '@/firebase';
+import { useFirestore, useUser, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import { fetchGithubRepo } from '@/app/actions/github';
 import { UserMenu } from '@/components/auth/UserMenu';
 import { AuthDialog } from '@/components/auth/AuthDialog';
 import JSZip from 'jszip';
@@ -27,7 +26,6 @@ export default function LandingPage() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const singleFileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const db = useFirestore();
   const { user, isUserLoading } = useUser();
@@ -71,16 +69,12 @@ export default function LandingPage() {
   const handleSnippetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pastedCode.trim() || !user) return;
-
     setIsProcessing(true);
-    setProcessingStage('Creating project from snippet...');
-    
+    setProcessingStage('Analyzing snippet...');
     try {
-      await createProjectWithFiles(user.uid, snippetName || 'Code Snippet', [
-        { path: 'snippet.txt', content: pastedCode }
-      ]);
+      await createProjectWithFiles(user.uid, snippetName || 'Code Snippet', [{ path: 'snippet.txt', content: pastedCode }]);
     } catch (error: any) {
-      toast({ title: "Failed", description: error.message, variant: "destructive" });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       setIsProcessing(false);
     }
   };
@@ -88,58 +82,51 @@ export default function LandingPage() {
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-
     setIsProcessing(true);
     setUploadProgress(0);
-    setProcessingStage('Extracting ZIP content...');
-    
+    setProcessingStage('Parsing ZIP archive...');
     try {
       const zip = new JSZip();
       const zipContent = await zip.loadAsync(file);
       const projectId = doc(collection(db, 'temp')).id;
       const projectName = file.name.replace('.zip', '');
-
       const projectRef = doc(db, 'users', user.uid, 'projects', projectId);
+
       setDocumentNonBlocking(projectRef, {
         id: projectId,
         userId: user.uid,
         name: projectName,
         status: 'processing',
-        uploadDate: new Date().toISOString(),
-        uploadFileName: file.name
+        uploadDate: new Date().toISOString()
       }, { merge: true });
 
       const filesToProcess = Object.entries(zipContent.files).filter(([path, entry]) => {
         const isDir = entry.dir;
-        const isHidden = path.split('/').some(part => part.startsWith('.') && part !== '.');
         const isBinary = /\.(png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|exe|dll|so|dylib|bin|pyc|pyo|pyd|class|jar|war|ear|db|sqlite|pdb|msi|woff|woff2|ttf|eot|mp3|mp4|mov|avi|wav|ogg|m4a|7z|rar|dmg|iso|pkg|apk)$/i.test(path);
         const isNodeModules = path.includes('node_modules/') || path.includes('vendor/') || path.includes('.git/');
-        return !isDir && !isHidden && !isBinary && !isNodeModules;
+        return !isDir && !isBinary && !isNodeModules;
       });
 
       let processedCount = 0;
       for (const [path, zipEntry] of filesToProcess) {
         const content = await zipEntry.async('string');
-        if (content.length < 800000) {
-          const fileId = doc(collection(db, 'temp')).id;
-          const fileRef = doc(db, 'users', user.uid, 'projects', projectId, 'codeFiles', fileId);
-          setDocumentNonBlocking(fileRef, {
-            id: fileId,
-            projectId: projectId,
-            userId: user.uid,
-            filePath: path,
-            fileName: path.split('/').pop() || '',
-            fileContent: content,
-            fileExtension: path.split('.').pop() || '',
-            lastAnalyzedDate: new Date().toISOString()
-          }, { merge: true });
-        }
+        const fileId = doc(collection(db, 'temp')).id;
+        const fileRef = doc(db, 'users', user.uid, 'projects', projectId, 'codeFiles', fileId);
+        setDocumentNonBlocking(fileRef, {
+          id: fileId,
+          projectId: projectId,
+          userId: user.uid,
+          filePath: path,
+          fileName: path.split('/').pop() || '',
+          fileContent: content,
+          fileExtension: path.split('.').pop() || '',
+          lastAnalyzedDate: new Date().toISOString()
+        }, { merge: true });
         processedCount++;
         setUploadProgress(Math.round((processedCount / filesToProcess.length) * 100));
       }
 
       setDocumentNonBlocking(projectRef, { status: 'analyzed', lastAnalysisDate: new Date().toISOString() }, { merge: true });
-      await new Promise(resolve => setTimeout(resolve, 1000));
       router.push(`/dashboard/${projectId}`);
     } catch (error: any) {
       toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
@@ -147,175 +134,122 @@ export default function LandingPage() {
     }
   };
 
-  if (isUserLoading) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  if (isUserLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
 
   if (isProcessing) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center space-y-8 animate-in fade-in duration-500">
-        <div className="w-24 h-24 rounded-3xl bg-primary/10 flex items-center justify-center relative">
-          <Loader2 className="w-12 h-12 text-primary animate-spin" />
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 space-y-6">
+        <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-semibold">{processingStage}</h2>
+          <p className="text-muted-foreground">Preparing codebase for intelligence synthesis...</p>
         </div>
-        <div className="space-y-2 max-w-md">
-          <h2 className="text-3xl font-headline font-bold text-white tracking-tight">Processing Code</h2>
-          <p className="text-muted-foreground">{processingStage}</p>
-        </div>
-        <div className="w-full max-w-md space-y-4">
-          <Progress value={uploadProgress || 50} className="h-2" />
-        </div>
+        <Progress value={uploadProgress || 30} className="w-full max-w-sm h-1.5" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 py-20 relative">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
       <AuthDialog isOpen={isAuthOpen} onOpenChange={setIsAuthOpen} />
       
-      <div className="absolute top-6 right-6 z-50">
-        {user && <UserMenu />}
-      </div>
-
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/10 rounded-full blur-[120px]" />
-      </div>
-
-      <div className="relative z-10 w-full max-w-6xl space-y-16 text-center">
-        <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-4">
-            <Zap className="w-4 h-4" />
-            <span>AI-Powered Code Intelligence</span>
-          </div>
-          <h1 className="text-6xl md:text-7xl font-headline font-bold text-white tracking-tight leading-tight">
-            Understand any <span className="text-primary">code</span> <br /> in seconds.
-          </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            CodeWhisper maps, explains, and audits your projects via ZIP, GitHub, or direct code input.
-          </p>
+      <header className="h-16 border-b bg-white dark:bg-slate-950 sticky top-0 z-50 flex items-center justify-between px-6">
+        <div className="flex items-center gap-2">
+          <Code2 className="w-6 h-6 text-primary" />
+          <span className="font-bold text-lg">CodeWhisperr</span>
         </div>
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm">Docs</Button>
+          <Button variant="ghost" size="sm">Pricing</Button>
+          <div className="w-px h-4 bg-border mx-2" />
+          {user ? <UserMenu /> : <Button size="sm" onClick={() => setIsAuthOpen(true)}>Sign In</Button>}
+        </div>
+      </header>
+
+      <main className="flex-1 flex flex-col items-center">
+        <section className="py-24 px-6 w-full max-w-5xl text-center space-y-8">
+          <div className="space-y-4">
+            <h1 className="text-5xl md:text-6xl font-headline font-bold text-slate-900 dark:text-white leading-tight">
+              AI Codebase Explainer & Debugger
+            </h1>
+            <p className="text-xl text-slate-500 dark:text-slate-400 max-w-3xl mx-auto">
+              Understand unfamiliar code faster with professional-grade AI analysis. Map architectures, audit security, and optimize performance in seconds.
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-4">
+            <Button size="lg" className="px-8 gap-2" onClick={() => user ? window.scrollTo({ top: 800, behavior: 'smooth' }) : setIsAuthOpen(true)}>
+              Start Analysis <ArrowRight className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="lg" className="px-8">Try Demo</Button>
+          </div>
+        </section>
 
         {!user ? (
-          <Card className="max-w-md mx-auto p-10 bg-card/50 border-white/5 backdrop-blur-xl space-y-8 animate-in slide-in-from-bottom-4 duration-700">
-            <div className="space-y-2 text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Lock className="w-8 h-8 text-primary" />
+          <section className="py-12 w-full max-w-md px-6">
+            <Card className="p-8 text-center space-y-6">
+              <ShieldCheck className="w-12 h-12 text-primary mx-auto" />
+              <div className="space-y-2">
+                <h3 className="text-xl font-semibold">Sign in to continue</h3>
+                <p className="text-sm text-muted-foreground">Secure your projects and access history with our unified dashboard.</p>
               </div>
-              <h2 className="text-2xl font-headline font-bold text-white">Login Required</h2>
-              <p className="text-muted-foreground">Sign in to start analyzing your codebases and save your projects.</p>
-            </div>
-            
-            <div className="grid gap-4">
-              <Button 
-                className="w-full h-12 text-base font-semibold gap-3"
-                onClick={() => setIsAuthOpen(true)}
-              >
-                Get Started
-                <ArrowRight className="w-5 h-5" />
-              </Button>
-            </div>
-            
-            <p className="text-[10px] text-center text-muted-foreground uppercase tracking-widest font-bold">
-              Secure authentication via Firebase
-            </p>
-          </Card>
+              <Button className="w-full" onClick={() => setIsAuthOpen(true)}>Get Started</Button>
+            </Card>
+          </section>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in duration-700">
-            <Card className="p-8 bg-card/50 border-white/5 hover:border-primary/50 transition-all flex flex-col items-center text-center space-y-6">
-              <div className="p-4 rounded-2xl bg-primary/10">
-                <Upload className="w-8 h-8 text-primary" />
-              </div>
-              <div className="space-y-2 flex-1">
-                <h3 className="text-xl font-headline font-semibold">Project ZIP</h3>
-                <p className="text-sm text-muted-foreground">Upload full repositories for deep architectural mapping.</p>
-              </div>
-              <input type="file" accept=".zip" className="hidden" ref={fileInputRef} onChange={handleZipUpload} />
-              <Button variant="outline" className="w-full border-white/10" onClick={() => fileInputRef.current?.click()}>
-                Select ZIP
-              </Button>
+          <section className="py-20 w-full max-w-6xl px-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="hover:border-primary transition-colors cursor-pointer group">
+              <CardHeader>
+                <Github className="w-10 h-10 text-slate-400 group-hover:text-primary transition-colors mb-2" />
+                <CardTitle>GitHub Repository URL</CardTitle>
+                <CardDescription>Directly analyze any public repository by providing its URL.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2">
+                  <Input placeholder="https://github.com/..." value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} />
+                  <Button size="sm">Import</Button>
+                </div>
+              </CardContent>
             </Card>
 
-            <Card className="p-8 bg-card/50 border-white/5 hover:border-accent/50 transition-all flex flex-col items-center text-center space-y-6">
-              <div className="p-4 rounded-2xl bg-accent/10">
-                <Github className="w-8 h-8 text-accent" />
-              </div>
-              <form onSubmit={(e) => { e.preventDefault(); /* implement ingest */ }} className="w-full space-y-4 flex flex-col flex-1">
-                <div className="space-y-2">
-                  <h3 className="text-xl font-headline font-semibold">GitHub Repo</h3>
-                  <p className="text-sm text-muted-foreground">Import public projects directly from URL.</p>
-                </div>
-                <Input placeholder="URL..." className="bg-background/50 border-white/10" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} />
-                <Button className="w-full bg-accent text-accent-foreground mt-auto" type="submit" disabled={!githubUrl}>
-                  Analyze Repo
-                </Button>
-              </form>
+            <Card className="hover:border-primary transition-colors cursor-pointer group" onClick={() => fileInputRef.current?.click()}>
+              <CardHeader>
+                <Upload className="w-10 h-10 text-slate-400 group-hover:text-primary transition-colors mb-2" />
+                <CardTitle>Upload ZIP File</CardTitle>
+                <CardDescription>Analyze local projects by uploading a compressed archive.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <input type="file" accept=".zip" className="hidden" ref={fileInputRef} onChange={handleZipUpload} />
+                <Button variant="outline" className="w-full">Select Archive</Button>
+              </CardContent>
             </Card>
 
-            <Card className="p-8 bg-card/50 border-white/5 hover:border-white/20 transition-all flex flex-col items-center text-center space-y-6 overflow-hidden">
-              <div className="p-4 rounded-2xl bg-muted/50">
-                <FileCode className="w-8 h-8 text-muted-foreground" />
-              </div>
-              <div className="w-full flex-1 flex flex-col">
-                <div className="space-y-2 mb-4">
-                  <h3 className="text-xl font-headline font-semibold">Quick Analysis</h3>
-                  <p className="text-sm text-muted-foreground">Paste code or upload a single text/code file.</p>
-                </div>
-                
-                <Tabs defaultValue="paste" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 bg-background/50 mb-4">
-                    <TabsTrigger value="paste" className="text-xs">Paste</TabsTrigger>
-                    <TabsTrigger value="upload" className="text-xs">File</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="paste" className="space-y-3 mt-0">
-                    <Input 
-                      placeholder="Project name..." 
-                      className="bg-background/50 border-white/10 text-xs h-8"
-                      value={snippetName}
-                      onChange={(e) => setSnippetName(e.target.value)}
-                    />
-                    <Textarea 
-                      placeholder="Paste your code here..." 
-                      className="bg-background/50 border-white/10 min-h-[100px] text-xs font-code"
-                      value={pastedCode}
-                      onChange={(e) => setPastedCode(e.target.value)}
-                    />
-                    <Button size="sm" className="w-full" disabled={!pastedCode} onClick={handleSnippetSubmit}>
-                      Run Analysis
-                    </Button>
-                  </TabsContent>
-                  
-                  <TabsContent value="upload" className="mt-0">
-                    <div className="py-10 border-2 border-dashed border-white/5 rounded-lg hover:border-white/10 transition-colors cursor-pointer" onClick={() => singleFileInputRef.current?.click()}>
-                      <FileText className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
-                      <p className="text-xs text-muted-foreground">Click to select file</p>
-                    </div>
+            <Card className="hover:border-primary transition-colors cursor-pointer group">
+              <CardHeader>
+                <FileCode className="w-10 h-10 text-slate-400 group-hover:text-primary transition-colors mb-2" />
+                <CardTitle>Paste Code</CardTitle>
+                <CardDescription>Instant line-by-line explanation for snippets or individual files.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="form">
+                  <TabsContent value="form" className="m-0 space-y-2">
+                    <Input placeholder="Project Name" value={snippetName} onChange={(e) => setSnippetName(e.target.value)} />
+                    <Textarea placeholder="Paste code here..." className="min-h-[100px] text-xs font-mono" value={pastedCode} onChange={(e) => setPastedCode(e.target.value)} />
+                    <Button className="w-full" disabled={!pastedCode} onClick={handleSnippetSubmit}>Run Analysis</Button>
                   </TabsContent>
                 </Tabs>
-              </div>
+              </CardContent>
             </Card>
-          </div>
+          </section>
         )}
+      </main>
 
-        <div className="pt-8 border-t border-white/5">
-          <div className="flex flex-wrap justify-center gap-8 text-muted-foreground text-sm">
-            {[
-              { icon: CheckCircle2, label: "Secure Analysis" },
-              { icon: Search, label: "Deep Inspection" },
-              { icon: Code2, label: "Multi-language Support" }
-            ].map((item, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <item.icon className="w-4 h-4 text-primary" />
-                <span>{item.label}</span>
-              </div>
-            ))}
-          </div>
+      <footer className="py-12 border-t bg-white dark:bg-slate-950 text-center">
+        <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Secure Analysis</div>
+          <div className="flex items-center gap-1.5"><Search className="w-4 h-4" /> Deep Inspection</div>
+          <div className="flex items-center gap-1.5"><Zap className="w-4 h-4" /> Real-time Audit</div>
         </div>
-      </div>
+      </footer>
     </div>
   );
 }

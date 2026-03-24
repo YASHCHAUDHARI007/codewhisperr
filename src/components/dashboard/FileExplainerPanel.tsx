@@ -1,19 +1,17 @@
-
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
 import Editor from "@monaco-editor/react";
-import Typewriter from "typewriter-effect";
 import { Card } from '@/components/ui/card';
-import { Sparkles, Loader2, BrainCircuit, Terminal, Braces, Bug, FileText, ChevronDown } from 'lucide-react';
+import { Sparkles, Loader2, Braces, Bug, FileText, ChevronDown, CheckCircle2, Terminal } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 export function FileExplainerPanel({ file }: { file: any }) {
   const [explanation, setExplanation] = useState("");
   const [bugs, setBugs] = useState("");
-  const [summary, setSummary] = useState("");
+  const [optimization, setOptimization] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("explain");
   const currentFileId = useRef<string | null>(null);
@@ -21,11 +19,10 @@ export function FileExplainerPanel({ file }: { file: any }) {
   useEffect(() => {
     async function explainFile() {
       if (!file || currentFileId.current === file.id) return;
-      
       currentFileId.current = file.id;
       setExplanation("");
       setBugs("");
-      setSummary("");
+      setOptimization("");
       setLoading(true);
 
       try {
@@ -33,61 +30,54 @@ export function FileExplainerPanel({ file }: { file: any }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-            systemPrompt: "You are a world-class software engineer. Break down your response into three sections labeled 'EXPLANATION:', 'BUGS:', and 'SUMMARY:'. Be technical, clear, and direct.",
+            systemPrompt: "You are a senior software engineer. Analyze the code and provide structured insights in three sections labeled 'EXPLANATION:', 'BUGS:', and 'OPTIMIZATION:'. Be precise, technical, and objective.",
             input: `Path: ${file.filePath}\nContent:\n${file.fileContent.slice(0, 15000)}`,
-            stream: false
           }),
         });
 
         if (!res.ok) throw new Error("AI engine failure");
-        
         const data = await res.json();
         const text = data.result || "";
         
-        // Simple parsing for tabs
-        const parts = text.split(/(EXPLANATION:|BUGS:|SUMMARY:)/i);
-        let currentExp = "", currentBugs = "", currentSum = "";
+        const parts = text.split(/(EXPLANATION:|BUGS:|OPTIMIZATION:)/i);
+        let currentExp = "", currentBugs = "", currentOpt = "";
         
         for (let i = 0; i < parts.length; i++) {
           const part = parts[i].trim();
           if (part.toUpperCase() === "EXPLANATION:") currentExp = parts[i+1] || "";
           if (part.toUpperCase() === "BUGS:") currentBugs = parts[i+1] || "";
-          if (part.toUpperCase() === "SUMMARY:") currentSum = parts[i+1] || "";
+          if (part.toUpperCase() === "OPTIMIZATION:") currentOpt = parts[i+1] || "";
         }
 
         setExplanation(currentExp || text);
-        setBugs(currentBugs || "No specific issues identified in this module.");
-        setSummary(currentSum || "Module analyzed successfully.");
+        setBugs(currentBugs || "No critical issues detected in this module.");
+        setOptimization(currentOpt || "Code is following standard architectural patterns.");
       } catch (error) {
         console.error("AI Error:", error);
-        setExplanation("Intelligence synthesis aborted. Neural network timed out.");
+        setExplanation("Failed to synthesize module intelligence. The file may be too large for current context limits.");
       } finally {
         setLoading(false);
       }
     }
-
     explainFile();
   }, [file]);
 
   return (
-    <div className="h-full flex flex-col bg-[#0f172a]">
-      {/* Top Half: Monaco Editor */}
-      <div className="flex-1 min-h-0 flex flex-col">
-        <div className="h-10 px-4 flex items-center justify-between bg-[#020617] border-b border-[#1e293b] shrink-0">
+    <div className="h-full flex flex-col bg-white dark:bg-slate-950">
+      <div className="flex-1 min-h-0 flex flex-col border-b">
+        <div className="h-10 px-4 flex items-center justify-between border-b bg-slate-50 dark:bg-slate-900/50">
           <div className="flex items-center gap-3">
-             <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest bg-white/5 px-2 py-1 rounded-md">
-                <Braces className="w-3 h-3 text-primary" />
-                {file.fileName}
-             </div>
-             <span className="text-[10px] text-muted-foreground/30 font-code">{file.filePath}</span>
+             <Badge variant="outline" className="text-[10px] font-mono gap-1.5 h-6">
+                <Braces className="w-3 h-3 text-primary" /> {file.fileName}
+             </Badge>
+             <span className="text-[10px] text-muted-foreground font-mono opacity-60 truncate max-w-md">{file.filePath}</span>
           </div>
-          <div className="flex items-center gap-2 opacity-50">
-             <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
-             <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
-             <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
+          <div className="flex items-center gap-2">
+             <div className="w-2 h-2 rounded-full bg-slate-200 dark:bg-slate-800" />
+             <div className="w-2 h-2 rounded-full bg-slate-200 dark:bg-slate-800" />
           </div>
         </div>
-        <div className="flex-1 min-h-0 bg-[#020617]/40">
+        <div className="flex-1 min-h-0">
            <Editor
               height="100%"
               defaultLanguage={file.fileExtension === 'tsx' ? 'typescript' : file.fileExtension || 'javascript'}
@@ -95,104 +85,66 @@ export function FileExplainerPanel({ file }: { file: any }) {
               value={file.fileContent}
               options={{
                 readOnly: true,
-                minimap: { enabled: true },
+                minimap: { enabled: false },
                 fontSize: 13,
-                fontFamily: 'Source Code Pro',
-                padding: { top: 20 },
-                lineNumbersMinChars: 3,
-                glyphMargin: false,
+                fontFamily: 'JetBrains Mono, Source Code Pro, monospace',
+                padding: { top: 16 },
                 scrollBeyondLastLine: false,
                 automaticLayout: true,
-                backgroundColor: '#02061700'
+                renderLineHighlight: 'all',
+                backgroundColor: '#00000000'
               }}
             />
         </div>
       </div>
 
-      {/* Bottom Half: AI Output Tabs */}
-      <div className="h-[40%] flex flex-col border-t border-[#1e293b] bg-[#020617]/50">
-        <div className="h-11 px-4 flex items-center justify-between border-b border-[#1e293b] bg-[#020617]/80 shrink-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex items-center">
-            <TabsList className="bg-transparent border-0 h-full p-0 gap-8">
-              <TabsTrigger value="explain" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-[10px] uppercase tracking-widest font-black text-muted-foreground data-[state=active]:text-white transition-all gap-2">
-                 <FileText className="w-3 h-3" />
-                 Explain
+      <div className="h-[40%] flex flex-col bg-slate-50 dark:bg-slate-900/20">
+        <div className="h-10 px-4 flex items-center justify-between border-b bg-white dark:bg-slate-950">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+            <TabsList className="bg-transparent h-full p-0 gap-6">
+              <TabsTrigger value="explain" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-[11px] font-bold uppercase tracking-wider">
+                 Explanation
               </TabsTrigger>
-              <TabsTrigger value="bugs" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-accent data-[state=active]:bg-transparent text-[10px] uppercase tracking-widest font-black text-muted-foreground data-[state=active]:text-white transition-all gap-2">
-                 <Bug className="w-3 h-3" />
-                 Bugs
+              <TabsTrigger value="bugs" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-destructive data-[state=active]:bg-transparent text-[11px] font-bold uppercase tracking-wider">
+                 Issues
               </TabsTrigger>
-              <TabsTrigger value="summary" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-white data-[state=active]:bg-transparent text-[10px] uppercase tracking-widest font-black text-muted-foreground data-[state=active]:text-white transition-all gap-2">
-                 <Sparkles className="w-3 h-3" />
-                 Summary
+              <TabsTrigger value="opt" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-amber-500 data-[state=active]:bg-transparent text-[11px] font-bold uppercase tracking-wider">
+                 Optimization
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="flex items-center gap-2">
-             <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest opacity-40">Intelligence Engine v2.0</div>
-             <ChevronDown className="w-3 h-3 text-muted-foreground/30" />
-          </div>
         </div>
 
-        <div className="flex-1 min-h-0 relative">
-          <ScrollArea className="h-full">
-            <div className="p-6 max-w-5xl mx-auto">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 animate-pulse">
-                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                  <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground">Decoding logic blocks...</p>
-                </div>
-              ) : (
-                <div className="bg-[#1e293b]/30 p-6 rounded-2xl border border-white/5 shadow-2xl min-h-[150px]">
-                  <Tabs value={activeTab} className="m-0">
-                    <TabsContent value="explain" className="m-0 focus-visible:ring-0">
-                       <div className="prose prose-invert prose-sm max-w-none text-muted-foreground leading-relaxed font-body">
-                          {explanation && (
-                             <Typewriter
-                                options={{
-                                  strings: [explanation],
-                                  autoStart: true,
-                                  delay: 5,
-                                  cursor: '',
-                                }}
-                             />
-                          )}
-                       </div>
-                    </TabsContent>
-                    <TabsContent value="bugs" className="m-0 focus-visible:ring-0">
-                       <div className="prose prose-invert prose-sm max-w-none text-muted-foreground leading-relaxed font-body">
-                          {bugs && (
-                             <Typewriter
-                                options={{
-                                  strings: [bugs],
-                                  autoStart: true,
-                                  delay: 5,
-                                  cursor: '',
-                                }}
-                             />
-                          )}
-                       </div>
-                    </TabsContent>
-                    <TabsContent value="summary" className="m-0 focus-visible:ring-0">
-                       <div className="prose prose-invert prose-sm max-w-none text-muted-foreground leading-relaxed font-body">
-                          {summary && (
-                             <Typewriter
-                                options={{
-                                  strings: [summary],
-                                  autoStart: true,
-                                  delay: 5,
-                                  cursor: '',
-                                }}
-                             />
-                          )}
-                       </div>
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </div>
+        <ScrollArea className="flex-1">
+          <div className="p-6 max-w-5xl">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
+                <Loader2 className="w-6 h-6 animate-spin text-primary opacity-50" />
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Synthesizing insights...</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Tabs value={activeTab} className="m-0">
+                  <TabsContent value="explain" className="m-0 focus-visible:ring-0">
+                    <div className="prose prose-slate dark:prose-invert prose-sm max-w-none text-slate-600 dark:text-slate-400 leading-relaxed font-body whitespace-pre-wrap">
+                      {explanation}
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="bugs" className="m-0 focus-visible:ring-0">
+                    <div className="prose prose-slate dark:prose-invert prose-sm max-w-none text-slate-600 dark:text-slate-400 leading-relaxed font-body whitespace-pre-wrap">
+                      {bugs}
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="opt" className="m-0 focus-visible:ring-0">
+                    <div className="prose prose-slate dark:prose-invert prose-sm max-w-none text-slate-600 dark:text-slate-400 leading-relaxed font-body whitespace-pre-wrap">
+                      {optimization}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
       </div>
     </div>
   );

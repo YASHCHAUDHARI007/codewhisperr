@@ -1,19 +1,22 @@
-
 'use server';
 /**
  * @fileOverview Parallel AI analysis for project overviews.
- * Returns summary, tech stack, architecture, and a Mermaid flowchart.
+ * Returns comprehensive metrics including summary, confidence, and optimization tips.
  */
 
 import { ai, AI_MODEL } from '@/ai/genkit';
 import { z } from 'zod';
 
 const AiProjectOverviewOutputSchema = z.object({
-  summary: z.string().describe("High-level summary of purpose."),
-  techStack: z.array(z.string()).describe('Core technologies detected.'),
-  architecture: z.string().describe("Step-by-step architectural breakdown."),
-  bugs: z.array(z.string()).describe("Potential inefficiencies or bugs detected."),
-  mermaidFlowchart: z.string().describe("Mermaid syntax for a flowchart of the project logic."),
+  summary: z.string().describe("High-level professional summary of the project purpose."),
+  techStack: z.array(z.string()).describe('Core technologies and frameworks detected.'),
+  architecture: z.string().describe("Structured architectural breakdown of the codebase."),
+  bugs: z.array(z.string()).describe("Potential bugs, security vulnerabilities, or inefficiencies."),
+  optimizationTips: z.array(z.string()).describe("Actionable performance or structure improvements."),
+  confidenceScore: z.number().min(0).max(100).describe("AI confidence score in its own analysis (0-100)."),
+  suggestionsCount: z.number().describe("Number of potential improvements identified."),
+  languages: z.array(z.string()).describe("Primary programming languages detected."),
+  mermaidFlowchart: z.string().describe("Mermaid syntax flowchart of the project logic."),
 });
 
 export type AiProjectOverviewOutput = z.infer<typeof AiProjectOverviewOutputSchema>;
@@ -45,14 +48,16 @@ const prompt = ai.definePrompt({
   input: { schema: z.object({ codebaseContent: z.string() }) },
   output: { schema: AiProjectOverviewOutputSchema },
   config: { model: AI_MODEL },
-  prompt: `You are a senior software architect. Analyze the provided codebase and return a detailed, structured analysis.
+  prompt: `You are a professional software architect. Analyze the provided codebase and return a structured, productivity-focused analysis.
 
 Focus on:
-1. What the code does (Summary)
-2. The primary frameworks and libraries (Tech Stack)
-3. Step-by-step logic flow (Architecture)
-4. Potential issues or performance bottlenecks (Bugs)
-5. A visual representation of the main flow in Mermaid syntax (Mermaid Flowchart)
+1. Executive Summary: What does this codebase actually do?
+2. Tech Stack: Primary frameworks, languages, and libraries.
+3. Architecture: How is the logic structured?
+4. Technical Debt/Bugs: Security flaws or logic bugs.
+5. Optimization: Suggestions for performance or readability.
+6. Metrics: Confidence score, suggestion count, and primary languages.
+7. Visualization: A Mermaid flowchart representing the main system flow.
 
 Codebase Context:
 {{{codebaseContent}}}`,

@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, Github, Code2, Loader2, FileCode, Search, Terminal, ArrowRight, ShieldCheck, Zap } from 'lucide-react';
+import { Upload, Github, Code2, Loader2, FileCode, Search, Terminal, ArrowRight, ShieldCheck, Zap, Sparkles, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -62,7 +62,7 @@ export default function LandingPage() {
       }, { merge: true });
     }));
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1500));
     router.push(`/dashboard/${projectId}`);
   };
 
@@ -70,7 +70,7 @@ export default function LandingPage() {
     e.preventDefault();
     if (!pastedCode.trim() || !user) return;
     setIsProcessing(true);
-    setProcessingStage('Analyzing snippet...');
+    setProcessingStage('Ingesting Snippet');
     try {
       await createProjectWithFiles(user.uid, snippetName || 'Code Snippet', [{ path: 'snippet.txt', content: pastedCode }]);
     } catch (error: any) {
@@ -84,7 +84,7 @@ export default function LandingPage() {
     if (!file || !user) return;
     setIsProcessing(true);
     setUploadProgress(0);
-    setProcessingStage('Parsing ZIP archive...');
+    setProcessingStage('Decompressing Archive');
     try {
       const zip = new JSZip();
       const zipContent = await zip.loadAsync(file);
@@ -107,6 +107,7 @@ export default function LandingPage() {
         return !isDir && !isBinary && !isNodeModules;
       });
 
+      setProcessingStage('Synchronizing Files');
       let processedCount = 0;
       for (const [path, zipEntry] of filesToProcess) {
         const content = await zipEntry.async('string');
@@ -126,25 +127,47 @@ export default function LandingPage() {
         setUploadProgress(Math.round((processedCount / filesToProcess.length) * 100));
       }
 
+      setProcessingStage('Finalizing Project');
       setDocumentNonBlocking(projectRef, { status: 'analyzed', lastAnalysisDate: new Date().toISOString() }, { merge: true });
-      router.push(`/dashboard/${projectId}`);
+      setTimeout(() => router.push(`/dashboard/${projectId}`), 1000);
     } catch (error: any) {
       toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
       setIsProcessing(false);
     }
   };
 
-  if (isUserLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
+  if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950"><Loader2 className="w-8 h-8 animate-spin text-primary opacity-50" /></div>;
 
   if (isProcessing) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 space-y-6">
-        <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-semibold">{processingStage}</h2>
-          <p className="text-muted-foreground">Preparing codebase for intelligence synthesis...</p>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
+        <div className="w-full max-w-md space-y-12">
+          <div className="relative mx-auto w-24 h-24">
+            <div className="absolute inset-0 bg-primary/20 rounded-2xl animate-pulse" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Activity className="w-10 h-10 text-primary animate-bounce" />
+            </div>
+          </div>
+          
+          <div className="space-y-4">
+            <h2 className="text-3xl font-headline font-bold text-slate-900 dark:text-white">{processingStage}</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">Preparing your codebase for deep neural analysis...</p>
+          </div>
+
+          <div className="space-y-3">
+            <Progress value={uploadProgress || 30} className="h-2 w-full bg-slate-200 dark:bg-slate-800" />
+            <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              <span>{uploadProgress}% Complete</span>
+              <span>Syncing Data</span>
+            </div>
+          </div>
+
+          <div className="flex justify-center gap-6 pt-4 opacity-50">
+            <Zap className="w-5 h-5" />
+            <ShieldCheck className="w-5 h-5" />
+            <Sparkles className="w-5 h-5" />
+          </div>
         </div>
-        <Progress value={uploadProgress || 30} className="w-full max-w-sm h-1.5" />
       </div>
     );
   }
@@ -153,84 +176,107 @@ export default function LandingPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
       <AuthDialog isOpen={isAuthOpen} onOpenChange={setIsAuthOpen} />
       
-      <header className="h-16 border-b bg-white dark:bg-slate-950 sticky top-0 z-50 flex items-center justify-between px-6">
-        <div className="flex items-center gap-2">
+      <header className="h-16 border-b bg-white/80 dark:bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 flex items-center justify-between px-6">
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
           <Code2 className="w-6 h-6 text-primary" />
-          <span className="font-bold text-lg">Neuralyze</span>
+          <span className="font-headline font-bold text-xl tracking-tight">Neuralyze</span>
         </div>
         <div className="flex items-center gap-4">
-          {user ? <UserMenu /> : <Button size="sm" onClick={() => setIsAuthOpen(true)}>Sign In</Button>}
+          {user ? <UserMenu /> : <Button size="sm" onClick={() => setIsAuthOpen(true)} className="rounded-full px-6">Sign In</Button>}
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center">
+      <main className="flex-1 flex flex-col items-center overflow-x-hidden">
         <section className="py-24 px-6 w-full max-w-5xl text-center space-y-8">
-          <div className="space-y-4">
-            <h1 className="text-5xl md:text-6xl font-headline font-bold text-slate-900 dark:text-white leading-tight animate-in fade-in slide-in-from-top-10 duration-1000 ease-out">
-              Next-Gen Analysis
+          <div className="space-y-6">
+            <h1 className="text-5xl md:text-7xl font-headline font-bold text-slate-900 dark:text-white leading-[1.1] animate-in fade-in slide-in-from-top-10 duration-1000 ease-out fill-mode-both">
+              Next-Gen <span className="text-primary">Analysis</span>
             </h1>
-            <p className="text-xl text-slate-500 dark:text-slate-400 max-w-3xl mx-auto animate-in fade-in slide-in-from-top-8 duration-1000 delay-200 ease-out fill-mode-both">
+            <p className="text-xl md:text-2xl text-slate-500 dark:text-slate-400 max-w-2xl mx-auto animate-in fade-in slide-in-from-top-8 duration-1000 delay-200 ease-out fill-mode-both leading-relaxed">
               Analyze Deeper, Debug Smarter
             </p>
           </div>
           <div className="flex items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500 fill-mode-both">
-            <Button size="lg" className="px-8 gap-2" onClick={() => user ? window.scrollTo({ top: 400, behavior: 'smooth' }) : setIsAuthOpen(true)}>
-              Start Analysis <ArrowRight className="w-4 h-4" />
+            <Button size="lg" className="px-10 rounded-full h-14 text-lg font-semibold gap-3 shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all" onClick={() => user ? window.scrollTo({ top: 600, behavior: 'smooth' }) : setIsAuthOpen(true)}>
+              Launch Workspace <ArrowRight className="w-5 h-5" />
             </Button>
           </div>
         </section>
 
         {!user ? (
           <section className="py-12 w-full max-w-md px-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-700 fill-mode-both">
-            <Card className="p-8 text-center space-y-6">
-              <ShieldCheck className="w-12 h-12 text-primary mx-auto" />
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold">Sign in to continue</h3>
-                <p className="text-sm text-muted-foreground">Secure your projects and access history with our unified dashboard.</p>
+            <Card className="p-10 text-center space-y-8 border-slate-200 dark:border-slate-800 shadow-2xl rounded-3xl bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
+              <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto">
+                <ShieldCheck className="w-10 h-10 text-primary" />
               </div>
-              <Button className="w-full" onClick={() => setIsAuthOpen(true)}>Get Started</Button>
+              <div className="space-y-3">
+                <h3 className="text-2xl font-headline font-bold">Secure Access</h3>
+                <p className="text-slate-500 dark:text-slate-400 leading-relaxed">Sign in to securely store your projects and access history in your private cloud workspace.</p>
+              </div>
+              <Button className="w-full h-12 rounded-full text-base font-bold" onClick={() => setIsAuthOpen(true)}>Get Started Now</Button>
             </Card>
           </section>
         ) : (
-          <section className="py-20 w-full max-w-6xl px-6 grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-700 fill-mode-both">
-            <Card className="hover:border-primary transition-colors cursor-pointer group">
-              <CardHeader>
-                <Github className="w-10 h-10 text-slate-400 group-hover:text-primary transition-colors mb-2" />
-                <CardTitle>GitHub Repository URL</CardTitle>
-                <CardDescription>Directly analyze any public repository by providing its URL.</CardDescription>
+          <section className="py-20 w-full max-w-6xl px-6 grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-700 fill-mode-both">
+            <Card className="hover:border-primary transition-all cursor-pointer group rounded-3xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="p-8">
+                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
+                  <Github className="w-7 h-7 text-slate-400 group-hover:text-primary transition-colors" />
+                </div>
+                <CardTitle className="text-xl font-headline font-bold mb-2">GitHub Repo URL</CardTitle>
+                <CardDescription className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Directly analyze any public repository by providing its URL.</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-8 pb-8">
                 <div className="flex gap-2">
-                  <Input placeholder="https://github.com/..." value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} />
-                  <Button size="sm">Import</Button>
+                  <Input 
+                    placeholder="https://github.com/..." 
+                    value={githubUrl} 
+                    onChange={(e) => setGithubUrl(e.target.value)} 
+                    className="h-10 rounded-full bg-white dark:bg-slate-950"
+                  />
+                  <Button size="sm" className="rounded-full px-5 h-10">Import</Button>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="hover:border-primary transition-colors cursor-pointer group" onClick={() => fileInputRef.current?.click()}>
-              <CardHeader>
-                <Upload className="w-10 h-10 text-slate-400 group-hover:text-primary transition-colors mb-2" />
-                <CardTitle>Upload ZIP File</CardTitle>
-                <CardDescription>Analyze local projects by uploading a compressed archive.</CardDescription>
+            <Card className="hover:border-primary transition-all cursor-pointer group rounded-3xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden" onClick={() => fileInputRef.current?.click()}>
+              <CardHeader className="p-8">
+                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
+                  <Upload className="w-7 h-7 text-slate-400 group-hover:text-primary transition-colors" />
+                </div>
+                <CardTitle className="text-xl font-headline font-bold mb-2">Upload ZIP File</CardTitle>
+                <CardDescription className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Analyze local projects by uploading a compressed archive.</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-8 pb-8">
                 <input type="file" accept=".zip" className="hidden" ref={fileInputRef} onChange={handleZipUpload} />
-                <Button variant="outline" className="w-full">Select Archive</Button>
+                <Button variant="outline" className="w-full h-10 rounded-full border-slate-300 dark:border-slate-700 group-hover:bg-primary/5">Select Archive</Button>
               </CardContent>
             </Card>
 
-            <Card className="hover:border-primary transition-colors cursor-pointer group">
-              <CardHeader>
-                <FileCode className="w-10 h-10 text-slate-400 group-hover:text-primary transition-colors mb-2" />
-                <CardTitle>Paste Code</CardTitle>
-                <CardDescription>Instant line-by-line explanation for snippets or individual files.</CardDescription>
+            <Card className="hover:border-primary transition-all cursor-pointer group rounded-3xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="p-8">
+                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
+                  <FileCode className="w-7 h-7 text-slate-400 group-hover:text-primary transition-colors" />
+                </div>
+                <CardTitle className="text-xl font-headline font-bold mb-2">Paste Code</CardTitle>
+                <CardDescription className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Instant line-by-line explanation for snippets or individual files.</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-8 pb-8">
                 <Tabs defaultValue="form">
-                  <TabsContent value="form" className="m-0 space-y-2">
-                    <Input placeholder="Project Name" value={snippetName} onChange={(e) => setSnippetName(e.target.value)} />
-                    <Textarea placeholder="Paste code here..." className="min-h-[100px] text-xs font-mono" value={pastedCode} onChange={(e) => setPastedCode(e.target.value)} />
-                    <Button className="w-full" disabled={!pastedCode} onClick={handleSnippetSubmit}>Run Analysis</Button>
+                  <TabsContent value="form" className="m-0 space-y-3">
+                    <Input 
+                      placeholder="Project Name" 
+                      value={snippetName} 
+                      onChange={(e) => setSnippetName(e.target.value)} 
+                      className="h-10 rounded-full bg-white dark:bg-slate-950"
+                    />
+                    <Textarea 
+                      placeholder="Paste code here..." 
+                      className="min-h-[120px] text-xs font-mono rounded-2xl bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800" 
+                      value={pastedCode} 
+                      onChange={(e) => setPastedCode(e.target.value)} 
+                    />
+                    <Button className="w-full h-10 rounded-full" disabled={!pastedCode} onClick={handleSnippetSubmit}>Run Analysis</Button>
                   </TabsContent>
                 </Tabs>
               </CardContent>
@@ -239,11 +285,14 @@ export default function LandingPage() {
         )}
       </main>
 
-      <footer className="py-12 border-t bg-white dark:bg-slate-950 text-center">
-        <div className="flex items-center justify-center gap-8 text-sm text-muted-foreground">
-          <div className="flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Secure Analysis</div>
-          <div className="flex items-center gap-1.5"><Search className="w-4 h-4" /> Deep Inspection</div>
-          <div className="flex items-center gap-1.5"><Zap className="w-4 h-4" /> Real-time Audit</div>
+      <footer className="py-16 border-t bg-white dark:bg-slate-950/50">
+        <div className="max-w-6xl mx-auto px-6 flex flex-col items-center gap-8">
+          <div className="flex flex-wrap items-center justify-center gap-10 md:gap-16 text-sm text-muted-foreground font-bold uppercase tracking-widest">
+            <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-green-500" /> Secure Analysis</div>
+            <div className="flex items-center gap-2"><Search className="w-4 h-4 text-blue-500" /> Deep Inspection</div>
+            <div className="flex items-center gap-2"><Zap className="w-4 h-4 text-amber-500" /> Real-time Audit</div>
+          </div>
+          <p className="text-xs text-slate-400 dark:text-slate-600 font-medium">© 2024 Neuralyze Intelligence Engine. All Rights Reserved.</p>
         </div>
       </footer>
     </div>

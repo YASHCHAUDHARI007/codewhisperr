@@ -139,20 +139,20 @@ export default function DashboardPage() {
   return (
     <SidebarProvider defaultOpen>
       <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-950 overflow-hidden animate-in fade-in duration-1000">
-        <Sidebar className="border-r" collapsible="icon">
-          <SidebarHeader className="h-14 flex items-center px-4 border-b">
+        <Sidebar className="border-r border-slate-200 dark:border-slate-800" collapsible="icon">
+          <SidebarHeader className="h-14 flex items-center px-4 border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/')}>
               <Code2 className="w-5 h-5 text-primary" />
-              <span className="font-bold text-sm tracking-tight group-data-[collapsible=icon]:hidden">Neuralyze</span>
+              <span className="font-headline font-bold text-sm tracking-tight group-data-[collapsible=icon]:hidden">Neuralyze</span>
             </div>
           </SidebarHeader>
           <SidebarContent className="p-2 space-y-6">
              <div className="space-y-1 group-data-[collapsible=icon]:hidden animate-in slide-in-from-left-4 duration-700 delay-300 fill-mode-both">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-3 mb-2">Workspace</p>
-                <Button variant={activeTab === 'overview' ? 'secondary' : 'ghost'} className="w-full justify-start gap-2 h-9 px-3" onClick={() => setActiveTab('overview')}>
+                <Button variant={activeTab === 'overview' ? 'secondary' : 'ghost'} className="w-full justify-start gap-2 h-9 px-3 rounded-lg" onClick={() => setActiveTab('overview')}>
                   <LayoutDashboard className="w-4 h-4" /> Overview
                 </Button>
-                <Button variant={activeTab === 'chat' ? 'secondary' : 'ghost'} className="w-full justify-start gap-2 h-9 px-3" onClick={() => setActiveTab('chat')}>
+                <Button variant={activeTab === 'chat' ? 'secondary' : 'ghost'} className="w-full justify-start gap-2 h-9 px-3 rounded-lg" onClick={() => setActiveTab('chat')}>
                   <MessageSquare className="w-4 h-4" /> AI Chat
                 </Button>
              </div>
@@ -164,7 +164,7 @@ export default function DashboardPage() {
         </Sidebar>
 
         <SidebarInset className="flex flex-col min-w-0 bg-background">
-          <header className="h-14 border-b flex items-center justify-between px-6 bg-white dark:bg-slate-950/50 backdrop-blur-sm sticky top-0 z-20 animate-in slide-in-from-top-4 duration-700 delay-100 fill-mode-both">
+          <header className="h-14 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 bg-white/80 dark:bg-slate-950/50 backdrop-blur-sm sticky top-0 z-20 animate-in slide-in-from-top-4 duration-700 delay-100 fill-mode-both">
             <div className="flex items-center gap-4">
               <SidebarTrigger className="text-muted-foreground" />
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -174,7 +174,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <Button size="sm" variant="outline" className="h-8 gap-2"><RefreshCw className="w-3.5 h-3.5" /> Re-scan</Button>
+              <Button size="sm" variant="outline" className="h-8 gap-2 rounded-full px-4"><RefreshCw className="w-3.5 h-3.5" /> Re-scan</Button>
               <div className="w-px h-4 bg-border" />
               <UserMenu />
             </div>
@@ -182,14 +182,14 @@ export default function DashboardPage() {
 
           <main className="flex-1 overflow-hidden animate-in fade-in duration-1000 delay-500 fill-mode-both">
              <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-              <div className="px-6 py-2 border-b bg-slate-50 dark:bg-slate-900/20 flex items-center justify-between">
+              <div className="px-6 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/20 flex items-center justify-between">
                 <TabsList className="bg-transparent h-9 p-0 gap-6">
                   <TabsTrigger value="overview" className="h-9 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs font-semibold px-1">Dashboard</TabsTrigger>
                   <TabsTrigger value="explain" className="h-9 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs font-semibold px-1">Editor</TabsTrigger>
                   <TabsTrigger value="chat" className="h-9 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs font-semibold px-1">AI Chat</TabsTrigger>
                 </TabsList>
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
-                   <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                   <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                    AI Synthesis Active
                 </div>
               </div>

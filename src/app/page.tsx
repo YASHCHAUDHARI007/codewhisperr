@@ -159,9 +159,6 @@ export default function LandingPage() {
           <span className="font-bold text-lg">CodeWhisperr</span>
         </div>
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm">Docs</Button>
-          <Button variant="ghost" size="sm">Pricing</Button>
-          <div className="w-px h-4 bg-border mx-2" />
           {user ? <UserMenu /> : <Button size="sm" onClick={() => setIsAuthOpen(true)}>Sign In</Button>}
         </div>
       </header>
@@ -177,7 +174,7 @@ export default function LandingPage() {
             </p>
           </div>
           <div className="flex items-center justify-center gap-4">
-            <Button size="lg" className="px-8 gap-2" onClick={() => user ? window.scrollTo({ top: 800, behavior: 'smooth' }) : setIsAuthOpen(true)}>
+            <Button size="lg" className="px-8 gap-2" onClick={() => user ? window.scrollTo({ top: 400, behavior: 'smooth' }) : setIsAuthOpen(true)}>
               Start Analysis <ArrowRight className="w-4 h-4" />
             </Button>
           </div>

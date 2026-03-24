@@ -180,7 +180,6 @@ export default function LandingPage() {
             <Button size="lg" className="px-8 gap-2" onClick={() => user ? window.scrollTo({ top: 800, behavior: 'smooth' }) : setIsAuthOpen(true)}>
               Start Analysis <ArrowRight className="w-4 h-4" />
             </Button>
-            <Button variant="outline" size="lg" className="px-8">Try Demo</Button>
           </div>
         </section>
 

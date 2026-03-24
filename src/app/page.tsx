@@ -156,7 +156,7 @@ export default function LandingPage() {
       <header className="h-16 border-b bg-white dark:bg-slate-950 sticky top-0 z-50 flex items-center justify-between px-6">
         <div className="flex items-center gap-2">
           <Code2 className="w-6 h-6 text-primary" />
-          <span className="font-bold text-lg">CodeWhisperr</span>
+          <span className="font-bold text-lg">Neuralyze</span>
         </div>
         <div className="flex items-center gap-4">
           {user ? <UserMenu /> : <Button size="sm" onClick={() => setIsAuthOpen(true)}>Sign In</Button>}
@@ -167,10 +167,10 @@ export default function LandingPage() {
         <section className="py-24 px-6 w-full max-w-5xl text-center space-y-8">
           <div className="space-y-4">
             <h1 className="text-5xl md:text-6xl font-headline font-bold text-slate-900 dark:text-white leading-tight">
-              AI Codebase Explainer & Debugger
+              Next-Gen Analysis
             </h1>
             <p className="text-xl text-slate-500 dark:text-slate-400 max-w-3xl mx-auto">
-              Understand unfamiliar code faster with professional-grade AI analysis. Map architectures, audit security, and optimize performance in seconds.
+              Analyze Deeper, Debug Smarter.
             </p>
           </div>
           <div className="flex items-center justify-center gap-4">

@@ -4,8 +4,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 export const metadata: Metadata = {
-  title: 'CodeWhisper | AI Codebase Explainer',
-  description: 'Understand any codebase in seconds with AI-powered analysis and interactive debugging.',
+  title: 'Neuralyze | Next-Gen AI Codebase Explainer',
+  description: 'Analyze Deeper, Debug Smarter. Understand any codebase in seconds with AI-powered analysis and interactive debugging.',
 };
 
 export default function RootLayout({
